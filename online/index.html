@@ -1,0 +1,38 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tarshid Online Login</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="login-wrap">
+    <section class="hero login-card">
+      <div class="brand">
+        <div class="logo">T</div>
+        <div>
+          <h1>Tarshid</h1>
+          <p>Online Smart Home Portal</p>
+        </div>
+      </div>
+      <p style="margin-top:18px;">Use your server account. Offline MAC access remains available only from the ESP32 local AP when internet is unavailable.</p>
+      <form id="loginForm" autocomplete="on">
+        <label>Username
+          <input id="username" name="username" autocomplete="username" required minlength="3" maxlength="32" placeholder="admin">
+        </label>
+        <label>Password
+          <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+        </label>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <p id="loginMessage" class="muted"></p>
+    </section>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+  <script>TarshidOnline.initLoginPage();</script>
+</body>
+</html>

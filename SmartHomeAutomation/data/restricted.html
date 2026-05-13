@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarshid</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #f5f5f7;
+    --surface: #ffffff;
+    --border:  #e2e2e7;
+    --text:    #1a1a1e;
+    --muted:   #8a8a95;
+    --accent:  #6366f1;
+    --on:      #16a34a;
+    --off:     #e5e7eb;
+    --danger:  #ef4444;
+    --warn:    #f59e0b;
+    --radius:  18px;
+    --shadow:  0 2px 12px rgba(0,0,0,.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:      #0f0f12;
+      --surface: #1c1c22;
+      --border:  #2a2a34;
+      --text:    #f0f0f5;
+      --muted:   #6b6b7a;
+      --off:     #2a2a34;
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Logo ─────────────────────────────── */
+  .logo {
+    font-size: 1.1rem;
+    font-weight: 900;
+    letter-spacing: .18em;
+    color: var(--accent);
+    margin-bottom: 32px;
+  }
+
+  /* ── Card ─────────────────────────────── */
+  .card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+
+  /* ── Section label ────────────────────── */
+  .label {
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  /* ── Relay row ────────────────────────── */
+  .relay-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .relay-row:last-child { border-bottom: none; }
+
+  .relay-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  .relay-state {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* ── Toggle switch ────────────────────── */
+  .toggle-wrap { flex: 0 0 auto; }
+
+  .toggle-input { display: none; }
+
+  .toggle-track {
+    display: block;
+    width: 62px;
+    height: 34px;
+    border-radius: 34px;
+    background: var(--off);
+    border: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+    transition: background 200ms ease, border-color 200ms ease;
+    touch-action: manipulation;
+  }
+
+  .toggle-track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,.22);
+    transition: transform 200ms ease;
+  }
+
+  .toggle-input:checked + .toggle-track {
+    background: var(--on);
+  }
+
+  .toggle-input:checked + .toggle-track::after {
+    transform: translateX(28px);
+  }
+
+  .toggle-input:disabled + .toggle-track {
+    opacity: .45;
+    cursor: not-allowed;
+  }
+
+  /* ── Timer card ───────────────────────── */
+  .timer-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .field-label {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  select, input[type="number"] {
+    width: 100%;
+    height: 50px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0 14px;
+    appearance: none;
+    outline: none;
+    transition: border-color 160ms ease;
+  }
+
+  select:focus, input[type="number"]:focus {
+    border-color: var(--accent);
+  }
+
+  /* ── Buttons ──────────────────────────── */
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  button {
+    height: 52px;
+    border-radius: 13px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 160ms ease, transform 120ms ease;
+    touch-action: manipulation;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  .btn-start {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .btn-cancel {
+    background: var(--border);
+    color: var(--text);
+  }
+
+  /* ── Timer status chip ────────────────── */
+  .timer-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 11px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: .88rem;
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  .timer-status.running {
+    background: rgba(245,158,11,.1);
+    border-color: rgba(245,158,11,.35);
+    color: var(--warn);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: 0 0 auto;
+  }
+
+  /* ── Connection indicator ─────────────── */
+  .conn {
+    font-size: .75rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: var(--border);
+    color: var(--muted);
+    margin-bottom: 24px;
+    transition: background 220ms ease, color 220ms ease;
+  }
+  .conn.online {
+    background: rgba(22,163,74,.12);
+    color: var(--on);
+  }
+  .conn.offline {
+    background: rgba(239,68,68,.1);
+    color: var(--danger);
+  }
+</style>
+</head>
+<body>
+
+<div class="logo">TARSHID</div>
+
+<div id="conn" class="conn">Connecting…</div>
+
+<!-- ── Relay Control ──────────────────────── -->
+<div class="card">
+  <div class="label">Relay</div>
+  <div id="relayContainer"></div>
+</div>
+
+<!-- ── Timer ──────────────────────────────── -->
+<div class="card">
+  <div class="label">Timer</div>
+  <div class="timer-grid">
+
+    <div>
+      <div class="field-label">Relay</div>
+      <select id="timerChannel"></select>
+    </div>
+
+    <div>
+      <div class="field-label">Duration (minutes)</div>
+      <input id="timerMinutes" type="number" min="1" step="1" value="5">
+    </div>
+
+    <div id="timerStatus" class="timer-status">
+      <span class="dot"></span>
+      <span id="timerStatusText">No active timer</span>
+    </div>
+
+    <div class="btn-row">
+      <button id="startBtn" class="btn-start">Start</button>
+      <button id="cancelBtn" class="btn-cancel">Cancel</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* ── State ──────────────────────────────── */
+  let socket = null;
+  let ready  = false;
+  let state  = null;
+  let reconnHandle = null;
+  let reconnDelay  = 1800;
+  let serverOffset = 0;
+
+  const connEl      = document.getElementById("conn");
+  const relayEl     = document.getElementById("relayContainer");
+  const timerCh     = document.getElementById("timerChannel");
+  const timerMin    = document.getElementById("timerMinutes");
+  const startBtn    = document.getElementById("startBtn");
+  const cancelBtn   = document.getElementById("cancelBtn");
+  const timerStatus = document.getElementById("timerStatus");
+  const timerText   = document.getElementById("timerStatusText");
+
+  /* ── Helpers ────────────────────────────── */
+  function now() { return Math.floor(Date.now() / 1000 + serverOffset); }
+
+  function fmtRemaining(sec) {
+    if (sec <= 0) return "Ending…";
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return `${m}m ${s}s left`;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function relayIndex(relay, fallbackIndex) {
+    return Number.isInteger(Number(relay && relay.index)) ? Number(relay.index) : fallbackIndex;
+  }
+
+  function relayDisplayName(relay, fallbackIndex) {
+    if (relay && relay.name) return relay.name;
+    return `Relay ${relayIndex(relay, fallbackIndex) + 1}`;
+  }
+
+  function selectedRelayExists(channel) {
+    return state && Array.isArray(state.relays)
+      && state.relays.some((relay, i) => relayIndex(relay, i) === channel);
+  }
+
+  function relayByChannel(channel) {
+    if (!state || !Array.isArray(state.relays)) return null;
+    return state.relays.find((relay, i) => relayIndex(relay, i) === channel) || null;
+  }
+
+  function syncRelaySelectOptions() {
+    if (!state || !Array.isArray(state.relays)) return;
+    const selected = timerCh.value;
+    timerCh.innerHTML = state.relays.map((relay, i) => {
+      const index = relayIndex(relay, i);
+      return `<option value="${index}">${escapeHtml(relayDisplayName(relay, i))}</option>`;
+    }).join("");
+    if (selectedRelayExists(Number(selected))) timerCh.value = selected;
+  }
+
+  /* ── Render ─────────────────────────────── */
+  function render() {
+    if (!state || !Array.isArray(state.relays)) return;
+    const locked = !!state.nightLock;
+    syncRelaySelectOptions();
+
+    /* relay rows */
+    relayEl.innerHTML = state.relays.map((r, i) => {
+      const on = r.state === "ON";
+      const index = relayIndex(r, i);
+      const name = relayDisplayName(r, i);
+      return `
+        <div class="relay-row">
+          <div>
+            <div class="relay-name">${escapeHtml(name)}</div>
+            <div class="relay-state">${on ? "ON" : "OFF"}</div>
+          </div>
+          <label class="toggle-wrap">
+            <input class="toggle-input" type="checkbox" id="tog${index}"
+              ${on ? "checked" : ""}
+              ${locked && !on ? "disabled" : ""}
+              onchange="toggleRelay(${index}, this.checked)">
+            <span class="toggle-track"></span>
+          </label>
+        </div>`;
+    }).join("");
+
+    /* timer status (show for selected relay) */
+    const ch = Number(timerCh.value);
+    const relay = relayByChannel(ch);
+    if (relay && relay.timerActive && relay.timerEnd) {
+      const rem = relay.timerEnd - now();
+      timerStatus.className = "timer-status running";
+      timerText.textContent = fmtRemaining(rem);
+    } else {
+      timerStatus.className = "timer-status";
+      timerText.textContent = "No active timer";
+    }
+  }
+
+  /* ── WebSocket ──────────────────────────── */
+  function send(payload) {
+    if (!ready || !socket) return false;
+    socket.send(JSON.stringify(payload));
+    return true;
+  }
+
+  function connect() {
+    if (socket && socket.readyState <= 1) return;
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    socket = new WebSocket(`${proto}://${location.hostname}:81/`);
+
+    socket.onopen = () => {
+      ready = true;
+      reconnDelay = 1800;
+      clearTimeout(reconnHandle);
+      reconnHandle = null;
+      connEl.className = "conn online";
+      connEl.textContent = "Live";
+      const n = new Date();
+      send({ type: "time_sync", epoch: Math.floor(n / 1000),
+        year: n.getFullYear(), month: n.getMonth()+1, day: n.getDate(),
+        hours: n.getHours(), minutes: n.getMinutes(), seconds: n.getSeconds(),
+        tzOffsetMinutes: n.getTimezoneOffset() });
+      send({ type: "get_state" });
+    };
+
+    socket.onmessage = ({ data }) => {
+      let msg;
+      try { msg = JSON.parse(data); } catch { return; }
+      if (typeof msg.ts === "number") serverOffset = msg.ts - Date.now() / 1000;
+      if (msg.type === "state_snapshot") { state = msg; render(); }
+    };
+
+    socket.onerror = () => { if (socket.readyState !== 3) socket.close(); };
+
+    socket.onclose = () => {
+      ready = false;
+      connEl.className = "conn offline";
+      connEl.textContent = "Offline";
+      if (!reconnHandle) {
+        reconnHandle = setTimeout(() => { reconnHandle = null; connect(); }, reconnDelay);
+        reconnDelay = Math.min(reconnDelay * 2, 10000);
+      }
+    };
+  }
+
+  /* ── Actions ────────────────────────────── */
+  window.toggleRelay = (ch, on) => {
+    if (!send({ type: "set_manual", channel: ch, mode: on ? "ON" : "OFF" })) {
+      /* revert optimistic toggle if offline */
+      const tog = document.getElementById(`tog${ch}`);
+      if (tog) tog.checked = !on;
+    } else {
+      send({ type: "get_state" });
+    }
+  };
+
+  startBtn.addEventListener("click", () => {
+    const mins = Number(timerMin.value);
+    if (!mins || mins < 1) { timerMin.focus(); return; }
+    const channel = Number(timerCh.value);
+    if (!selectedRelayExists(channel)) return;
+    const n = new Date();
+    send({ type: "set_timer", channel,
+      durationMinutes: mins, target: "ON",
+      epoch: Math.floor(n / 1000),
+      year: n.getFullYear(), month: n.getMonth()+1, day: n.getDate(),
+      hours: n.getHours(), minutes: n.getMinutes(), seconds: n.getSeconds(),
+      tzOffsetMinutes: n.getTimezoneOffset() });
+    send({ type: "get_state" });
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    const channel = Number(timerCh.value);
+    if (!selectedRelayExists(channel)) return;
+    send({ type: "cancel_timer", channel });
+    send({ type: "get_state" });
+  });
+
+  timerCh.addEventListener("change", render);
+
+  /* ── Ticker (updates remaining time every second) ── */
+  setInterval(() => { if (state) render(); }, 1000);
+
+  /* ── Bootstrap ──────────────────────────── */
+  // AUTH GUARD: verify this user is authenticated AND restricted before
+  // showing the page. Non-restricted users are sent to the full dashboard;
+  // unauthenticated users are sent to the login/unauthorized page.
+  (async () => {
+    try {
+      const authResp = await fetch("/api/auth/status");
+      const authData = await authResp.json();
+      if (!authData.authenticated) {
+        window.location.replace("/unauthorized.html");
+        return;
+      }
+      if (!authData.isRestricted) {
+        window.location.replace("/");
+        return;
+      }
+    } catch {
+      window.location.replace("/unauthorized.html");
+      return;
+    }
+    try {
+      const r = await fetch("/api/state");
+      state = await r.json();
+      render();
+    } catch {}
+    connect();
+  })();
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !ready) connect();
+  });
+</script>
+</body>
+</html>

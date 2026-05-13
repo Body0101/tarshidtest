@@ -1,0 +1,56 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tarshid Online Simple Control</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">T</div>
+        <div><h1>Simple Control</h1><p>Online user dashboard</p></div>
+      </div>
+      <div class="actions">
+        <select id="deviceSelect" aria-label="Device"></select>
+        <button id="refreshBtn">Refresh</button>
+        <button id="logoutBtn" class="danger">Logout</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Online Mode</div>
+      <h2>Relay and timer control.</h2>
+      <p>Normal users can operate relays and timers. Advanced mapping, power, and diagnostics remain admin-only.</p>
+      <div class="status-row" style="margin-top:18px;">
+        <span id="sessionPill" class="pill">Session</span>
+        <span id="devicePill" class="pill warn">Device not selected</span>
+        <span id="syncPill" class="pill">Waiting for state</span>
+      </div>
+    </section>
+
+    <div class="grid two">
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">Control</div><h2>Relay Control</h2><p class="muted">Manual ON/OFF or AUTO sensor-based control.</p></div></div>
+        <div id="relayList" class="relay-list"></div>
+      </section>
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">Timer</div><h2>Timer Settings</h2><p class="muted">Start or cancel a relay timer.</p></div></div>
+        <div class="form-grid">
+          <label>Relay<select id="timerChannel"></select></label>
+          <label>Duration minutes<input id="timerMinutes" type="number" min="1" step="1" value="5"></label>
+          <label>Target<select id="timerTarget"><option value="ON">ON</option><option value="OFF">OFF</option></select></label>
+        </div>
+        <div class="actions" style="margin-top:14px;"><button id="startTimerBtn" class="primary">Start Timer</button><button id="cancelTimerBtn">Cancel Timer</button></div>
+      </section>
+    </div>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+  <script>TarshidOnline.initDashboard({ requiredRole: "user", redirectAdminToAdvanced: true });</script>
+</body>
+</html>

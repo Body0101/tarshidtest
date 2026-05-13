@@ -1,0 +1,87 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tarshid Online Advanced Control</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">T</div>
+        <div><h1>Advanced Control</h1><p>Server-authenticated online dashboard</p></div>
+      </div>
+      <div class="actions">
+        <select id="deviceSelect" aria-label="Device"></select>
+        <button id="refreshBtn">Refresh</button>
+        <button id="logoutBtn" class="danger">Logout</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Online Mode</div>
+      <h2>Cloud control without replacing local automation.</h2>
+      <p>The ESP32 remains the immediate authority for relay, PIR, timer, and Night Lock behavior. This page writes commands to Supabase and listens for realtime state snapshots from the device.</p>
+      <div class="status-row" style="margin-top:18px;">
+        <span id="sessionPill" class="pill">Session</span>
+        <span id="devicePill" class="pill warn">Device not selected</span>
+        <span id="syncPill" class="pill">Waiting for state</span>
+      </div>
+    </section>
+
+    <div class="grid two">
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">Priority 1</div><h2>Relay Control</h2><p class="muted">Manual ON/OFF and AUTO use the same firmware command contract as offline mode.</p></div></div>
+        <div id="relayList" class="relay-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">Scheduler</div><h2>Timer Settings</h2><p class="muted">Timer commands are executed by the ESP32 using NTP time in online mode.</p></div></div>
+        <div class="form-grid">
+          <label>Relay<select id="timerChannel"></select></label>
+          <label>Duration minutes<input id="timerMinutes" type="number" min="1" step="1" value="5"></label>
+          <label>Target<select id="timerTarget"><option value="ON">ON</option><option value="OFF">OFF</option></select></label>
+        </div>
+        <div class="actions" style="margin-top:14px;"><button id="startTimerBtn" class="primary">Start Timer</button><button id="cancelTimerBtn">Cancel Timer</button></div>
+      </section>
+    </div>
+
+    <div class="grid two" style="margin-top:18px;">
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">Power</div><h2>Power Consumption</h2><p class="muted">Energy tracking and rated power are still validated by firmware and Night Lock rules.</p></div></div>
+        <label class="checkbox-row"><input id="energyTrackingToggle" type="checkbox"> Enable timer-only energy tracking</label>
+        <div id="powerList" class="relay-list" style="margin-top:14px;"></div>
+        <div class="actions" style="margin-top:14px;"><button id="resetConsumptionBtn" class="danger">Reset Consumption</button></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">Metrics</div><h2>Timer Statistics</h2><p class="muted">Live statistics mirror the ESP32 authoritative state.</p></div></div>
+        <div id="statsList" class="relay-list"></div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top:18px;">
+      <div class="section-head"><div><div class="kicker">Assignments</div><h2>Sensor Mapping</h2><p class="muted">Choose which relays each PIR sensor may influence in AUTO mode.</p></div><button id="saveMappingBtn" class="primary">Save Mapping</button></div>
+      <div id="mappingList" class="relay-list"></div>
+    </section>
+
+    <div class="grid two" style="margin-top:18px;">
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">Monitoring</div><h2>Sensor Activity</h2><p class="muted">Realtime PIR states from Supabase device snapshots.</p></div></div>
+        <div id="sensorList" class="sensor-list"></div>
+      </section>
+      <section class="panel">
+        <div class="section-head"><div><div class="kicker">History</div><h2>Activity Log</h2><p class="muted">Recent synced ESP32 events. PIR history is not persisted in ESP flash.</p></div></div>
+        <div id="eventList" class="event-list"></div>
+      </section>
+    </div>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+  <script>TarshidOnline.initDashboard({ requiredRole: "admin" });</script>
+</body>
+</html>
