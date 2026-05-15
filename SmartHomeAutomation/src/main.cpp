@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <esp_wifi.h>
 #include <esp_task_wdt.h>
 #include <LittleFS.h>
@@ -214,21 +215,21 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 }
 
 void setupWiFi() {
-  // Keep credentials/runtime Wi-Fi state in RAM only so reconnect attempts do
-  // not generate extra flash churn or stale network state across brownouts.
   WiFi.persistent(false);
-  // Disable Wi-Fi sleep so websocket and AP responsiveness stay stable under
-  // bursts of commands and frequent browser interaction.
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(onWiFiEvent);
 
+  // Erase any previously saved network credentials from the WiFi stack so
+  // connections are driven exclusively by the config-file values in STA_SSID /
+  // STA_PASSWORD (injected at build time via WIFI_STA_SSID / WIFI_STA_PASSWORD).
+  WiFi.disconnect(true, true);
+  delay(100);
+
   if (hasStaCredentials()) {
-    // ONLINE mode probe starts from STA only. If internet/Supabase are not
-    // available, enterOfflineMode() starts the AP and local portal explicitly.
     WiFi.mode(WIFI_STA);
     WiFi.begin(STA_SSID, STA_PASSWORD);
-    Serial.printf("[WiFi] Connecting STA to %s\n", STA_SSID);
+    Serial.printf("[WiFi] STA connecting to \"%s\" (credentials from build config)\n", STA_SSID);
   } else {
     WiFi.mode(WIFI_OFF);
     Serial.println("[WiFi] STA credentials empty; offline AP mode will start.");
@@ -237,12 +238,44 @@ void setupWiFi() {
 
 bool probeInternetAccess() {
   if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[Internet] Probe skipped: WiFi not connected");
     return false;
   }
+
+  // Stage 1: DNS resolution (fast, lightweight)
   IPAddress resolved;
-  // DNS resolution is a lightweight internet reachability check. It is called
-  // on a slow cadence only, never from relay/PIR timing paths.
-  return WiFi.hostByName("pool.ntp.org", resolved) == 1 && resolved != IPAddress(0, 0, 0, 0);
+  if (WiFi.hostByName("pool.ntp.org", resolved) != 1 || resolved == IPAddress(0, 0, 0, 0)) {
+    Serial.println("[Internet] DNS resolution failed (pool.ntp.org)");
+    return false;
+  }
+  Serial.printf("[Internet] DNS OK: pool.ntp.org -> %s\n", resolved.toString().c_str());
+
+  // Stage 2: HTTP connectivity check — confirm we can reach an actual server,
+  // not just resolve DNS through a captive portal.
+  WiFiClient client;
+  client.setTimeout(5);
+  if (!client.connect("httpbin.org", 80)) {
+    Serial.println("[Internet] HTTP connection to httpbin.org:80 failed");
+    return false;
+  }
+  client.print("GET /status/200 HTTP/1.0\r\nHost: httpbin.org\r\nConnection: close\r\n\r\n");
+
+  uint32_t httpStart = millis();
+  while (!client.available() && (millis() - httpStart) < 5000) {
+    delay(50);
+  }
+
+  bool httpOk = false;
+  if (client.available()) {
+    String statusLine = client.readStringUntil('\n');
+    httpOk = statusLine.indexOf("200") >= 0;
+    Serial.printf("[Internet] HTTP response: %s -> %s\n",
+                  statusLine.c_str(), httpOk ? "OK" : "FAIL");
+  } else {
+    Serial.println("[Internet] HTTP response timeout");
+  }
+  client.stop();
+  return httpOk;
 }
 
 void enterOfflineMode() {
@@ -257,15 +290,19 @@ void enterOfflineMode() {
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
   const bool apOk = startSecureSoftAp();
+
+  Serial.println("[Mode] OFFLINE_LOCAL activating");
   if (apOk) {
-    Serial.printf("[Mode] OFFLINE_LOCAL AP ready SSID=%s IP=%s\n",
-                  AP_SSID,
-                  WiFi.softAPIP().toString().c_str());
+    Serial.printf("[Mode]   AP SSID: %s  IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
   } else {
-    Serial.println("[Mode] OFFLINE_LOCAL failed to start SoftAP.");
+    Serial.println("[Mode]   WARNING: SoftAP failed to start!");
   }
-  if (keepSta && WiFi.status() != WL_CONNECTED) {
-    WiFi.begin(STA_SSID, STA_PASSWORD);
+  Serial.printf("[Mode]   WiFi mode: %s\n", keepSta ? "WIFI_AP_STA" : "WIFI_AP");
+  if (keepSta) {
+    Serial.printf("[Mode]   STA background reconnect to \"%s\" enabled\n", STA_SSID);
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.begin(STA_SSID, STA_PASSWORD);
+    }
   }
 
   gNetworkMode = NetworkMode::OFFLINE_LOCAL;
@@ -284,8 +321,6 @@ void enterOnlineMode() {
     return;
   }
 
-  // ONLINE mode must not expose local offline pages, captive DNS, WebSocket, or
-  // MAC-auth routes. Stop the portal first, then remove SoftAP completely.
   gWebPortal.end();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_STA);
@@ -301,7 +336,13 @@ void enterOnlineMode() {
   gCloudSync.requestStateSync();
   gTimeKeeper.trySyncFromNtp(true);
   pushSystemEvent("mode.online", "Online cloud mode active.");
-  Serial.println("[Mode] ONLINE_CLOUD active; SoftAP and local portal are disabled.");
+
+  Serial.println("[Mode] ONLINE_CLOUD active");
+  Serial.printf("[Mode]   WiFi mode: WIFI_STA (%s)\n",
+                WiFi.getMode() == WIFI_STA ? "confirmed" : "WARNING: unexpected mode");
+  Serial.printf("[Mode]   STA IP: %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("[Mode]   AP disabled: %s\n",
+                WiFi.softAPIP() == IPAddress(0, 0, 0, 0) ? "YES" : "NO — AP still visible!");
 }
 
 void maintainNetworkMode() {
@@ -340,7 +381,8 @@ void maintainNetworkMode() {
 
   if (gNetworkMode == NetworkMode::ONLINE_CLOUD &&
       ++gConsecutiveInternetFailures >= INTERNET_FAILURE_THRESHOLD) {
-    Serial.println("[Mode] Internet/cloud reachability lost; falling back to offline AP.");
+    Serial.printf("[Mode] Internet lost (%u consecutive failures); falling back to offline AP.\n",
+                  gConsecutiveInternetFailures);
     enterOfflineMode();
   }
 }
@@ -640,14 +682,26 @@ void setup() {
   });
 
   if (onlineModeAvailable()) {
+    Serial.printf("[Boot] Waiting for STA connection to \"%s\" ...\n", STA_SSID);
     const uint32_t staWaitStart = millis();
     while (WiFi.status() != WL_CONNECTED && (millis() - staWaitStart) < 8000UL) {
       delay(100);
     }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.printf("[Boot] STA connected in %lu ms  IP: %s\n",
+                    millis() - staWaitStart, WiFi.localIP().toString().c_str());
+    } else {
+      Serial.printf("[Boot] STA connection FAILED after %lu ms (status: %d)\n",
+                    millis() - staWaitStart, WiFi.status());
+    }
   }
   if (onlineModeAvailable() && probeInternetAccess()) {
+    Serial.println("[Boot] Internet verified — entering ONLINE mode");
     enterOnlineMode();
   } else {
+    if (onlineModeAvailable()) {
+      Serial.println("[Boot] Internet probe failed — falling back to OFFLINE mode");
+    }
     enterOfflineMode();
   }
 

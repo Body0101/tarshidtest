@@ -1,4 +1,18 @@
 ﻿(function () {
+  // Theme management (unified with data/index.html)
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem("theme", t);
+  }
+  (function initTheme() {
+    const saved = localStorage.getItem("theme");
+    if (saved) { applyTheme(saved); return; }
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) applyTheme("dark");
+  })();
+  function toggleTheme() {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  }
+
   const cfg = window.TARSHID_CONFIG || {};
   let client = null;
   let session = null;
@@ -331,7 +345,7 @@
     setPill("syncPill", currentState ? `Night Lock ${locked ? "ON" : "OFF"}` : "Waiting for state", locked ? "warn" : "good");
   }
 
-  window.TarshidOnline = { initLoginPage, initDashboard };
+  window.TarshidOnline = { initLoginPage, initDashboard, toggleTheme };
 })();
 
 

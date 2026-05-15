@@ -2,113 +2,308 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Tarshid</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+  /* ============================================================
+     DESIGN TOKENS — unified with index.html
+     ============================================================ */
   :root {
-    --bg:      #f5f5f7;
+    --bg: #f6f8fb;
+    --bg-grad-1: rgba(99, 102, 241, 0.08);
+    --bg-grad-2: rgba(16, 185, 129, 0.06);
     --surface: #ffffff;
-    --border:  #e2e2e7;
-    --text:    #1a1a1e;
-    --muted:   #8a8a95;
-    --accent:  #6366f1;
-    --on:      #16a34a;
-    --off:     #e5e7eb;
-    --danger:  #ef4444;
-    --warn:    #f59e0b;
-    --radius:  18px;
-    --shadow:  0 2px 12px rgba(0,0,0,.08);
+    --surface-2: #f3f5fa;
+    --surface-3: #eaeef5;
+    --text: #1a1f36;
+    --text-2: #475569;
+    --muted: #64748b;
+    --soft: #94a3b8;
+    --border: #e6e9ef;
+    --border-strong: #d6dbe4;
+    --border-focus: rgba(99, 102, 241, 0.45);
+    --shadow-xs: 0 1px 2px rgba(20, 24, 50, 0.04);
+    --shadow-sm: 0 2px 6px rgba(20, 24, 50, 0.06), 0 1px 2px rgba(20, 24, 50, 0.04);
+    --shadow-md: 0 8px 18px rgba(20, 24, 50, 0.08), 0 3px 6px rgba(20, 24, 50, 0.04);
+    --accent: #6366f1;
+    --accent-2: #4f46e5;
+    --accent-soft: rgba(99, 102, 241, 0.12);
+    --accent-ring: rgba(99, 102, 241, 0.22);
+    --on: #10b981;
+    --on-2: #059669;
+    --on-soft: rgba(16, 185, 129, 0.14);
+    --off: #ef4444;
+    --off-soft: rgba(239, 68, 68, 0.12);
+    --warn: #f59e0b;
+    --warn-soft: rgba(245, 158, 11, 0.16);
+    --error: #ef4444;
+    --radius-xs: 8px;
+    --radius-sm: 10px;
+    --radius: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 22px;
+    --radius-pill: 999px;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:      #0f0f12;
-      --surface: #1c1c22;
-      --border:  #2a2a34;
-      --text:    #f0f0f5;
-      --muted:   #6b6b7a;
-      --off:     #2a2a34;
-    }
+  [data-theme="dark"] {
+    --bg: #0a0f1c;
+    --bg-grad-1: rgba(99, 102, 241, 0.16);
+    --bg-grad-2: rgba(16, 185, 129, 0.08);
+    --surface: #131a2b;
+    --surface-2: #1c2538;
+    --surface-3: #232e44;
+    --text: #f1f5f9;
+    --text-2: #cbd5e1;
+    --muted: #94a3b8;
+    --soft: #64748b;
+    --border: #232c40;
+    --border-strong: #344056;
+    --border-focus: rgba(129, 140, 248, 0.55);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.5);
+    --accent: #818cf8;
+    --accent-2: #6366f1;
+    --accent-soft: rgba(129, 140, 248, 0.18);
+    --accent-ring: rgba(129, 140, 248, 0.3);
+    --on: #34d399;
+    --on-2: #10b981;
+    --on-soft: rgba(52, 211, 153, 0.18);
+    --off: #f87171;
+    --off-soft: rgba(248, 113, 113, 0.18);
+    --warn: #fbbf24;
+    --warn-soft: rgba(251, 191, 36, 0.2);
+    --error: #f87171;
+  }
+
+  /* ============================================================
+     BASE
+     ============================================================ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  *:focus-visible {
+    outline: 3px solid var(--border-focus);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
     background: var(--bg);
+    background-image:
+      radial-gradient(1200px 700px at 0% -10%, var(--bg-grad-1), transparent 65%),
+      radial-gradient(900px 500px at 100% 0%, var(--bg-grad-2), transparent 65%);
+    background-attachment: fixed;
     color: var(--text);
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 24px 16px 40px;
+    font-size: 16px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    transition: background 200ms ease, color 200ms ease;
   }
 
-  /* ── Logo ─────────────────────────────── */
-  .logo {
-    font-size: 1.1rem;
-    font-weight: 900;
-    letter-spacing: .18em;
-    color: var(--accent);
-    margin-bottom: 32px;
-  }
-
-  /* ── Card ─────────────────────────────── */
-  .card {
+  /* ── Header bar ──────────────────────── */
+  .topbar {
     width: 100%;
-    max-width: 400px;
+    max-width: 440px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 22px 24px;
-    box-shadow: var(--shadow);
-    margin-bottom: 16px;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
   }
 
-  /* ── Section label ────────────────────── */
-  .label {
-    font-size: .72rem;
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid;
+    place-items: center;
+    color: #fff;
+  }
+
+  .brand-mark .icon { width: 18px; height: 18px; }
+
+  .brand-name {
+    font-size: 1.1rem;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 160ms ease;
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  .icon-btn:hover {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+  }
+
+  .icon-btn .icon { width: 16px; height: 16px; }
+
+  /* ── SVG icon defaults ───────────────── */
+  .icon {
+    width: 1em;
+    height: 1em;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    flex: 0 0 auto;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  /* ── Connection pill ─────────────────── */
+  .conn {
+    font-size: 0.75rem;
     font-weight: 800;
-    letter-spacing: .12em;
-    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
     color: var(--muted);
+    margin-bottom: 20px;
+    transition: all 220ms ease;
+    letter-spacing: 0.04em;
+  }
+  .conn.online {
+    background: var(--on-soft);
+    border-color: transparent;
+    color: var(--on-2);
+  }
+  [data-theme="dark"] .conn.online { color: var(--on); }
+  .conn.offline {
+    background: var(--off-soft);
+    border-color: transparent;
+    color: var(--off);
+  }
+
+  /* ── Panel (card) ────────────────────── */
+  .panel {
+    width: 100%;
+    max-width: 440px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 22px 24px;
+    box-shadow: var(--shadow-sm);
     margin-bottom: 18px;
   }
 
-  /* ── Relay row ────────────────────────── */
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .panel-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    background: var(--accent-soft);
+    color: var(--accent);
+    flex: 0 0 auto;
+  }
+
+  .panel-icon .icon { width: 18px; height: 18px; }
+
+  .panel-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ── Relay row ───────────────────────── */
   .relay-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 14px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1.5px solid var(--border);
   }
   .relay-row:last-child { border-bottom: none; }
 
   .relay-name {
-    font-size: 1.15rem;
-    font-weight: 700;
+    font-size: 1.05rem;
+    font-weight: 800;
   }
 
   .relay-state {
-    font-size: .8rem;
+    font-size: 0.78rem;
     color: var(--muted);
     margin-top: 3px;
+    font-weight: 700;
   }
 
-  /* ── Toggle switch ────────────────────── */
-  .toggle-wrap { flex: 0 0 auto; }
+  .state-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .state-badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .state-badge.ON { background: var(--on-soft); color: var(--on-2); }
+  .state-badge.OFF { background: var(--off-soft); color: var(--off); }
+  [data-theme="dark"] .state-badge.ON { color: var(--on); }
 
+  /* ── Toggle switch ───────────────────── */
+  .toggle-wrap { flex: 0 0 auto; }
   .toggle-input { display: none; }
 
   .toggle-track {
     display: block;
-    width: 62px;
-    height: 34px;
-    border-radius: 34px;
-    background: var(--off);
-    border: 2px solid transparent;
+    width: 58px;
+    height: 32px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-3);
+    border: 2px solid var(--border);
     cursor: pointer;
     position: relative;
     transition: background 200ms ease, border-color 200ms ease;
@@ -118,38 +313,40 @@
   .toggle-track::after {
     content: "";
     position: absolute;
-    top: 3px;
-    left: 3px;
+    top: 2px;
+    left: 2px;
     width: 24px;
     height: 24px;
     border-radius: 50%;
     background: #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,.22);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
     transition: transform 200ms ease;
   }
 
   .toggle-input:checked + .toggle-track {
     background: var(--on);
+    border-color: var(--on);
   }
 
   .toggle-input:checked + .toggle-track::after {
-    transform: translateX(28px);
+    transform: translateX(26px);
   }
 
   .toggle-input:disabled + .toggle-track {
-    opacity: .45;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
-  /* ── Timer card ───────────────────────── */
+  /* ── Timer form ──────────────────────── */
   .timer-grid {
     display: grid;
     gap: 14px;
   }
 
   .field-label {
-    font-size: .8rem;
-    font-weight: 700;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
     color: var(--muted);
     margin-bottom: 6px;
   }
@@ -157,23 +354,24 @@
   select, input[type="number"] {
     width: 100%;
     height: 50px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     border: 1.5px solid var(--border);
-    background: var(--bg);
+    background: var(--surface-2);
     color: var(--text);
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 0.96rem;
+    font-weight: 700;
     padding: 0 14px;
     appearance: none;
     outline: none;
-    transition: border-color 160ms ease;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
   }
 
   select:focus, input[type="number"]:focus {
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
   }
 
-  /* ── Buttons ──────────────────────────── */
+  /* ── Buttons ─────────────────────────── */
   .btn-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -182,118 +380,186 @@
   }
 
   button {
-    height: 52px;
-    border-radius: 13px;
+    height: 50px;
+    border-radius: var(--radius);
     border: none;
-    font-size: 1rem;
-    font-weight: 700;
+    font-size: 0.92rem;
+    font-weight: 800;
     cursor: pointer;
-    transition: opacity 160ms ease, transform 120ms ease;
+    transition: opacity 160ms ease, transform 120ms ease, box-shadow 160ms ease;
     touch-action: manipulation;
   }
-  button:active { transform: scale(.97); }
-  button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
   .btn-start {
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
     color: #fff;
+    box-shadow: 0 4px 12px var(--accent-ring);
   }
+  .btn-start:hover { box-shadow: 0 6px 16px var(--accent-ring); }
 
   .btn-cancel {
-    background: var(--border);
-    color: var(--text);
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1.5px solid var(--border);
   }
+  .btn-cancel:hover { border-color: var(--border-strong); }
 
-  /* ── Timer status chip ────────────────── */
+  /* ── Timer status chip ───────────────── */
   .timer-status {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 10px 14px;
-    border-radius: 11px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    font-size: .88rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    border: 1.5px solid var(--border);
+    font-size: 0.86rem;
     font-weight: 700;
     color: var(--muted);
   }
 
   .timer-status.running {
-    background: rgba(245,158,11,.1);
-    border-color: rgba(245,158,11,.35);
+    background: var(--warn-soft);
+    border-color: transparent;
     color: var(--warn);
   }
 
   .dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: currentColor;
     flex: 0 0 auto;
   }
 
-  /* ── Connection indicator ─────────────── */
-  .conn {
-    font-size: .75rem;
-    font-weight: 700;
-    padding: 5px 12px;
-    border-radius: 20px;
-    background: var(--border);
-    color: var(--muted);
-    margin-bottom: 24px;
-    transition: background 220ms ease, color 220ms ease;
+  /* ── Toast ───────────────────────────── */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
+    padding: 14px 22px;
+    border-radius: var(--radius);
+    background: #1a1f36;
+    color: #fff;
+    font-size: 0.92rem;
+    font-weight: 600;
+    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    max-width: min(92vw, 480px);
+    transition: opacity 220ms ease, transform 220ms ease;
   }
-  .conn.online {
-    background: rgba(22,163,74,.12);
-    color: var(--on);
+  .toast.show { opacity: 1; transform: translate(-50%, -8px); }
+
+  /* ── Responsive ──────────────────────── */
+  @media (max-width: 520px) {
+    .panel { padding: 16px; }
+    .topbar { padding: 12px 16px; }
   }
-  .conn.offline {
-    background: rgba(239,68,68,.1);
-    color: var(--danger);
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 </style>
 </head>
 <body>
 
-<div class="logo">TARSHID</div>
+<!-- SVG icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24">
+      <path d="M3 11l9-8 9 8v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2V11z" />
+    </symbol>
+    <symbol id="i-power" viewBox="0 0 24 24">
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </symbol>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark"><svg class="icon"><use href="#i-home" /></svg></div>
+    <div class="brand-name">TARSHID</div>
+  </div>
+  <button id="themeToggle" class="icon-btn" type="button" aria-label="Toggle theme">
+    <svg class="icon"><use href="#i-moon" /></svg>
+  </button>
+</header>
 
 <div id="conn" class="conn">Connecting…</div>
 
-<!-- ── Relay Control ──────────────────────── -->
-<div class="card">
-  <div class="label">Relay</div>
+<!-- Relay Control -->
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-icon"><svg class="icon"><use href="#i-power" /></svg></div>
+    <div class="panel-title">Relay Control</div>
+  </div>
   <div id="relayContainer"></div>
 </div>
 
-<!-- ── Timer ──────────────────────────────── -->
-<div class="card">
-  <div class="label">Timer</div>
+<!-- Timer -->
+<div class="panel">
+  <div class="panel-head">
+    <div class="panel-icon"><svg class="icon"><use href="#i-clock" /></svg></div>
+    <div class="panel-title">Timer</div>
+  </div>
   <div class="timer-grid">
-
     <div>
       <div class="field-label">Relay</div>
       <select id="timerChannel"></select>
     </div>
-
     <div>
       <div class="field-label">Duration (minutes)</div>
       <input id="timerMinutes" type="number" min="1" step="1" value="5">
     </div>
-
     <div id="timerStatus" class="timer-status">
       <span class="dot"></span>
       <span id="timerStatusText">No active timer</span>
     </div>
-
     <div class="btn-row">
       <button id="startBtn" class="btn-start">Start</button>
       <button id="cancelBtn" class="btn-cancel">Cancel</button>
     </div>
-
   </div>
 </div>
 
+<div id="toast" class="toast"></div>
+
 <script>
+  /* ── Theme toggle (unified with index.html) ── */
+  const themeBtn = document.getElementById("themeToggle");
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem("theme", t);
+  }
+  (function initTheme() {
+    const saved = localStorage.getItem("theme");
+    if (saved) { applyTheme(saved); return; }
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) applyTheme("dark");
+  })();
+  themeBtn.addEventListener("click", () => {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
   /* ── State ──────────────────────────────── */
   let socket = null;
   let ready  = false;
@@ -373,7 +639,7 @@
         <div class="relay-row">
           <div>
             <div class="relay-name">${escapeHtml(name)}</div>
-            <div class="relay-state">${on ? "ON" : "OFF"}</div>
+            <span class="state-badge ${on ? "ON" : "OFF"}">${on ? "ON" : "OFF"}</span>
           </div>
           <label class="toggle-wrap">
             <input class="toggle-input" type="checkbox" id="tog${index}"

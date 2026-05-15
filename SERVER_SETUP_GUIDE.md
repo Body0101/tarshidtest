@@ -67,9 +67,9 @@ Generate a strong random token. Store only its hash in Supabase:
 ```sql
 insert into public.smart_home_devices (id, name, command_token_hash)
 values (
-  'esp32-main',
-  'Main ESP32 Smart Home',
-  encode(digest(convert_to('REPLACE_WITH_STRONG_DEVICE_TOKEN', 'UTF8'), 'sha256'), 'hex')
+  'my-device-01',
+  'kitchen',
+  encode(digest(convert_to('ada4ae99-22ef-42c1-b991-caed688eb7e4', 'UTF8'), 'sha256'), 'hex')
 )
 on conflict (id) do update
 set name = excluded.name,
@@ -81,8 +81,8 @@ set name = excluded.name,
 Build the ESP firmware with:
 
 ```powershell
-$env:CLOUD_DEVICE_ID="esp32-main"
-$env:CLOUD_COMMAND_TOKEN="REPLACE_WITH_STRONG_DEVICE_TOKEN"
+$env:CLOUD_DEVICE_ID="my-device-01"
+$env:CLOUD_COMMAND_TOKEN="ada4ae99-22ef-42c1-b991-caed688eb7e4"
 ```
 
 ## Create Online Users
@@ -96,7 +96,7 @@ Admin example:
 
 ```sql
 insert into public.smart_home_profiles (id, username, display_name, global_role)
-values ('AUTH_USER_UUID', 'admin', 'Admin User', 'admin')
+values ('AUTH_USER_UUID', 'admin', 'Eng Body', 'admin')
 on conflict (id) do update
 set username = excluded.username,
     display_name = excluded.display_name,

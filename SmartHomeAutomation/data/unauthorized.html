@@ -3,106 +3,213 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Access Denied - Tarshid</title>
     <style>
+        /* ============================================================
+           DESIGN TOKENS — unified with index.html
+           ============================================================ */
         :root {
             --bg: #f6f8fb;
+            --bg-grad-1: rgba(99, 102, 241, 0.08);
+            --bg-grad-2: rgba(16, 185, 129, 0.06);
             --surface: #ffffff;
+            --surface-2: #f3f5fa;
             --text: #1a1f36;
-            --error: #ef4444;
+            --text-2: #475569;
+            --muted: #64748b;
             --border: #e6e9ef;
+            --border-strong: #d6dbe4;
+            --border-focus: rgba(99, 102, 241, 0.45);
+            --shadow-sm: 0 2px 6px rgba(20, 24, 50, 0.06), 0 1px 2px rgba(20, 24, 50, 0.04);
+            --shadow-md: 0 8px 18px rgba(20, 24, 50, 0.08), 0 3px 6px rgba(20, 24, 50, 0.04);
+            --accent: #6366f1;
+            --accent-2: #4f46e5;
+            --accent-soft: rgba(99, 102, 241, 0.12);
+            --accent-ring: rgba(99, 102, 241, 0.22);
+            --off: #ef4444;
+            --off-soft: rgba(239, 68, 68, 0.12);
+            --error: #ef4444;
             --radius: 14px;
+            --radius-sm: 10px;
+            --radius-xl: 22px;
+            --radius-pill: 999px;
         }
 
         [data-theme="dark"] {
             --bg: #0a0f1c;
+            --bg-grad-1: rgba(99, 102, 241, 0.16);
+            --bg-grad-2: rgba(16, 185, 129, 0.08);
             --surface: #131a2b;
+            --surface-2: #1c2538;
             --text: #f1f5f9;
+            --text-2: #cbd5e1;
+            --muted: #94a3b8;
             --border: #232c40;
+            --border-strong: #344056;
+            --border-focus: rgba(129, 140, 248, 0.55);
+            --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45);
+            --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.5);
+            --accent: #818cf8;
+            --accent-2: #6366f1;
+            --accent-soft: rgba(129, 140, 248, 0.18);
+            --accent-ring: rgba(129, 140, 248, 0.3);
+            --off: #f87171;
+            --off-soft: rgba(248, 113, 113, 0.18);
+            --error: #f87171;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
+        /* ============================================================
+           BASE
+           ============================================================ */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        *:focus-visible {
+            outline: 3px solid var(--border-focus);
+            outline-offset: 2px;
+            border-radius: 6px;
         }
 
         body {
-            font-family: "Inter", system-ui, sans-serif;
+            font-family: "Inter", "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
             background: var(--bg);
+            background-image:
+                radial-gradient(1200px 700px at 0% -10%, var(--bg-grad-1), transparent 65%),
+                radial-gradient(900px 500px at 100% 0%, var(--bg-grad-2), transparent 65%);
+            background-attachment: fixed;
             color: var(--text);
             min-height: 100vh;
             display: grid;
             place-items: center;
             padding: 20px;
+            font-size: 16px;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+            transition: background 200ms ease, color 200ms ease;
         }
 
         .card {
             background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-xl);
             padding: 40px;
-            max-width: 500px;
+            max-width: 460px;
             text-align: center;
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-md);
         }
 
-        .icon {
+        .lock-icon {
             width: 64px;
             height: 64px;
-            color: var(--error);
-            margin-bottom: 20px;
+            border-radius: 18px;
+            background: var(--off-soft);
+            display: grid;
+            place-items: center;
+            margin: 0 auto 24px;
+        }
+
+        .lock-icon svg {
+            width: 32px;
+            height: 32px;
+            stroke: var(--error);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
         }
 
         h1 {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
+            font-weight: 800;
             margin-bottom: 12px;
         }
 
         p {
-            color: var(--text);
-            opacity: 0.8;
-            line-height: 1.6;
+            color: var(--text-2);
+            line-height: 1.65;
             margin-bottom: 20px;
+            font-size: 0.94rem;
         }
 
         .mac-display {
-            background: var(--bg);
-            padding: 12px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.9rem;
-            margin: 20px 0;
+            background: var(--surface-2);
+            padding: 14px 18px;
+            border-radius: var(--radius);
+            border: 1.5px solid var(--border);
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            font-size: 0.88rem;
+            font-weight: 700;
+            margin: 22px 0;
             word-break: break-all;
         }
 
+        .mac-display strong {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
         .contact {
-            font-size: 0.85rem;
-            opacity: 0.7;
+            font-size: 0.84rem;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .brand-line {
+            margin-top: 28px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+            font-size: 0.82rem;
+            font-weight: 900;
+            letter-spacing: 0.18em;
+            color: var(--accent);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="card">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
+        <div class="lock-icon">
+            <svg viewBox="0 0 24 24">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+        </div>
         <h1>Access Denied</h1>
         <p>You are not authorized to access this system. Please contact your administrator to request access.</p>
 
         <div class="mac-display">
-            <strong>Your Device MAC:</strong><br>
+            <strong>Your Device MAC</strong>
             <span id="deviceMac">Loading...</span>
         </div>
 
         <p class="contact">
             Share this MAC address with your admin for access approval.
         </p>
+
+        <div class="brand-line">TARSHID</div>
     </div>
 
     <script>
+        (function initTheme() {
+            const saved = localStorage.getItem("theme");
+            if (saved) { document.documentElement.setAttribute("data-theme", saved); return; }
+            if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
+        })();
+
         setInterval(() => {
             fetch('/api/auth/status')
                 .then(r => r.json())

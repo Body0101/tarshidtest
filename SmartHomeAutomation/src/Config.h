@@ -29,8 +29,8 @@ constexpr char AP_PASSWORD[] = "12345678";
 #define WIFI_STA_PASSWORD ""
 #endif
 
-constexpr char STA_SSID[] = "tarshid";
-constexpr char STA_PASSWORD[] = "12345678";
+constexpr char STA_SSID[] = WIFI_STA_SSID;
+constexpr char STA_PASSWORD[] = WIFI_STA_PASSWORD;
 
 constexpr RelayConfig RELAY_CONFIG[] = {
     {26, "Relay A", 60.0f},
