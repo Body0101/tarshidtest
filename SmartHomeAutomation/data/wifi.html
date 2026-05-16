@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wi-Fi Setup — ESP32 Smart Home</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    /* page-local overrides */
+    .wifi-card { max-width: 520px; margin: 0 auto; }
+    .network-list { list-style: none; padding: 0; margin: 0; max-height: 240px; overflow-y: auto; }
+    .network-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer;
+      border: 1.5px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .network-item:hover { background: var(--surface-2); }
+    .network-item.selected { border-color: var(--accent); background: var(--accent-ring); }
+    .network-ssid { flex: 1; font-weight: 700; font-size: 0.95rem; }
+    .network-rssi { font-size: 0.78rem; color: var(--muted); }
+    .section-title {
+      font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted); margin: 18px 0 8px;
+    }
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 0.92rem; font-weight: 700; }
+    .toggle-sub  { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    /* toggle switch */
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; cursor: pointer;
+      background: var(--surface-2); border-radius: 24px;
+      border: 1.5px solid var(--border); transition: 0.2s;
+    }
+    .slider:before {
+      content: ""; position: absolute; height: 16px; width: 16px;
+      left: 3px; bottom: 3px; background: var(--muted);
+      border-radius: 50%; transition: 0.2s;
+    }
+    input:checked + .slider { background: var(--accent); border-color: var(--accent); }
+    input:checked + .slider:before { transform: translateX(20px); background: #fff; }
+    .status-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; border-radius: 12px;
+      background: var(--surface-2); border: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+    .status-dot-live {
+      width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
+      background: var(--off);
+    }
+    .status-dot-live.connected { background: var(--on); }
+    .collapse { overflow: hidden; transition: max-height 0.25s ease, opacity 0.25s ease; }
+    .collapse.hidden { max-height: 0; opacity: 0; pointer-events: none; }
+    .collapse.visible { max-height: 800px; opacity: 1; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--accent); font-size: 0.88rem; font-weight: 700;
+      text-decoration: none; margin-bottom: 20px;
+    }
+    .back-link svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .btn-danger { background: var(--off-soft); color: var(--off); border: 1.5px solid var(--off); }
+    .btn-danger:hover { background: var(--off); color: #fff; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="content-area" style="padding: 24px 16px;">
+
+    <a href="/" class="back-link">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Dashboard
+    </a>
+
+    <div class="wifi-card">
+
+      <!-- Page heading -->
+      <h2 style="margin: 0 0 4px; font-size: 1.4rem;">Wi-Fi Setup</h2>
+      <p style="color: var(--muted); font-size: 0.88rem; margin: 0 0 18px;">
+        Connect the ESP32 to your home network. The setup AP stays open until a
+        successful internet connection is confirmed.
+      </p>
+
+      <!-- Live connection status -->
+      <div class="status-row" id="statusRow">
+        <div class="status-dot-live" id="statusDot"></div>
+        <div>
+          <div style="font-weight:700;font-size:0.92rem;" id="statusText">Checking…</div>
+          <div style="font-size:0.78rem;color:var(--muted);" id="statusSub"></div>
+        </div>
+      </div>
+
+      <!-- Network scan -->
+      <div class="section-title">Available Networks</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button class="btn btn-sm" id="scanBtn" onclick="startScan()">Scan</button>
+        <span id="scanStatus" style="font-size:0.82rem;color:var(--muted);align-self:center;"></span>
+      </div>
+      <ul class="network-list" id="networkList">
+        <li style="color:var(--muted);font-size:0.85rem;padding:8px 0;">
+          Press Scan to discover nearby networks.
+        </li>
+      </ul>
+
+      <!-- Manual / credential entry -->
+      <div class="section-title">Network Credentials</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <label class="form-label" for="ssidInput">SSID</label>
+          <input class="form-control" type="text" id="ssidInput" placeholder="Network name"
+                 maxlength="32" autocomplete="off" spellcheck="false" />
+        </div>
+        <div>
+          <label class="form-label" for="passInput">Password</label>
+          <div style="position:relative;">
+            <input class="form-control" type="password" id="passInput" placeholder="Wi-Fi password"
+                   maxlength="64" autocomplete="new-password" style="padding-right:44px;" />
+            <button onclick="togglePassVis('passInput','eyeBtn')" id="eyeBtn"
+              style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div class="section-title">Options</div>
+      <div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Save credentials</div>
+            <div class="toggle-sub">Persist SSID &amp; password to device storage</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="saveToggle" checked onchange="onSaveChange()" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Always connect on startup</div>
+            <div class="toggle-sub">Automatically reconnect every time the device boots</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="alwaysToggle" onchange="onAlwaysChange()" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+        <button class="btn btn-primary" style="flex:1 1 160px;" onclick="doConnect()">
+          Connect &amp; Save
+        </button>
+        <button class="btn btn-danger" style="flex:0 0 auto;" onclick="clearCredentials()"
+                title="Remove all saved Wi-Fi credentials from device storage">
+          Clear Saved
+        </button>
+      </div>
+      <div id="connectMsg" style="margin-top:12px;font-size:0.88rem;display:none;"></div>
+
+      <!-- Backup network (shown when alwaysConnect is enabled) -->
+      <div id="backupSection" class="collapse hidden">
+        <div class="section-title" style="margin-top:28px;">Backup Network</div>
+        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 12px;">
+          If the primary network is unreachable, the device will fall back to this
+          network before reopening the setup AP.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div>
+            <label class="form-label" for="bakSsidInput">Backup SSID</label>
+            <input class="form-control" type="text" id="bakSsidInput" placeholder="Backup network name"
+                   maxlength="32" autocomplete="off" spellcheck="false" />
+          </div>
+          <div>
+            <label class="form-label" for="bakPassInput">Backup Password</label>
+            <input class="form-control" type="password" id="bakPassInput" placeholder="Backup password"
+                   maxlength="64" autocomplete="new-password" />
+          </div>
+          <button class="btn btn-secondary" onclick="saveBackup()" style="align-self:flex-start;">
+            Save Backup Network
+          </button>
+          <div id="backupMsg" style="font-size:0.88rem;display:none;"></div>
+        </div>
+      </div>
+
+    </div><!-- /wifi-card -->
+  </div><!-- /content-area -->
+</div><!-- /app-shell -->
+
+<script>
+  let scanResults = [];
+
+  async function loadStatus() {
+    try {
+      const r = await fetch('/api/wifi/status');
+      if (!r.ok) return;
+      const d = await r.json();
+      const dot = document.getElementById('statusDot');
+      const txt = document.getElementById('statusText');
+      const sub = document.getElementById('statusSub');
+      if (d.connected) {
+        dot.classList.add('connected');
+        txt.textContent = 'Connected to ' + d.ssid;
+        sub.textContent = 'IP: ' + d.ip;
+      } else {
+        dot.classList.remove('connected');
+        txt.textContent = 'Not connected';
+        sub.textContent = d.ssid ? 'Last SSID: ' + d.ssid : 'No saved network';
+      }
+      if (d.alwaysConnect) {
+        document.getElementById('alwaysToggle').checked = true;
+        showBackupSection(true);
+      }
+      if (d.backupSsid) {
+        document.getElementById('bakSsidInput').value = d.backupSsid;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  async function startScan() {
+    const btn = document.getElementById('scanBtn');
+    const st  = document.getElementById('scanStatus');
+    btn.disabled = true;
+    st.textContent = 'Scanning…';
+    try {
+      const r = await fetch('/api/wifi/scan', { method: 'POST' });
+      const d = await r.json();
+      scanResults = d.networks || [];
+      renderNetworks(scanResults);
+      st.textContent = scanResults.length + ' networks found';
+    } catch(e) {
+      st.textContent = 'Scan failed';
+    }
+    btn.disabled = false;
+  }
+
+  function renderNetworks(networks) {
+    const ul = document.getElementById('networkList');
+    if (!networks.length) {
+      ul.innerHTML = '<li style="color:var(--muted);font-size:0.85rem;padding:8px 0;">No networks found.</li>';
+      return;
+    }
+    ul.innerHTML = networks.map((n, i) =>
+      `<li class="network-item" id="net-${i}" onclick="selectNetwork(${i})">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             style="flex:0 0 auto;opacity:${Math.max(0.3, (n.rssi+100)/70).toFixed(2)}">
+          <path d="M5 12.55a11 11 0 0 1 14 0M1.42 9A16 16 0 0 1 22.58 9M8.53 16.11a6 6 0 0 1 6.95 0"/>
+          <circle cx="12" cy="20" r="1" fill="currentColor"/>
+        </svg>
+        <span class="network-ssid">${escHtml(n.ssid)}</span>
+        <span class="network-rssi">${n.rssi} dBm${n.open ? ' · Open' : ''}</span>
+      </li>`
+    ).join('');
+  }
+
+  function selectNetwork(idx) {
+    document.querySelectorAll('.network-item').forEach(el => el.classList.remove('selected'));
+    const el = document.getElementById('net-' + idx);
+    if (el) el.classList.add('selected');
+    document.getElementById('ssidInput').value = scanResults[idx].ssid;
+    document.getElementById('passInput').focus();
+  }
+
+  function onSaveChange() {
+    const save = document.getElementById('saveToggle').checked;
+    if (!save) {
+      document.getElementById('alwaysToggle').checked = false;
+      showBackupSection(false);
+    }
+  }
+
+  function onAlwaysChange() {
+    const always = document.getElementById('alwaysToggle').checked;
+    if (always) document.getElementById('saveToggle').checked = true;
+    showBackupSection(always);
+  }
+
+  function showBackupSection(show) {
+    const sec = document.getElementById('backupSection');
+    sec.classList.toggle('visible', show);
+    sec.classList.toggle('hidden', !show);
+  }
+
+  async function doConnect() {
+    const ssid  = document.getElementById('ssidInput').value.trim();
+    const pass  = document.getElementById('passInput').value;
+    const save  = document.getElementById('saveToggle').checked;
+    const always = document.getElementById('alwaysToggle').checked;
+    const msg   = document.getElementById('connectMsg');
+
+    if (!ssid) { showMsg(msg, 'error', 'Please enter an SSID.'); return; }
+
+    showMsg(msg, 'info', 'Sending credentials to device…');
+    try {
+      const r = await fetch('/api/wifi/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid, pass, save, alwaysConnect: always })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        showMsg(msg, 'ok', d.msg || 'Connection request sent. The device is now connecting…');
+        setTimeout(loadStatus, 6000);
+      } else {
+        showMsg(msg, 'error', d.msg || 'Request failed.');
+      }
+    } catch(e) {
+      showMsg(msg, 'error', 'Network error. Check AP connection.');
+    }
+  }
+
+  async function saveBackup() {
+    const ssid = document.getElementById('bakSsidInput').value.trim();
+    const pass = document.getElementById('bakPassInput').value;
+    const msg  = document.getElementById('backupMsg');
+    if (!ssid) { showMsg(msg, 'error', 'Enter a backup SSID.'); return; }
+    try {
+      const r = await fetch('/api/wifi/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid, pass })
+      });
+      const d = await r.json();
+      showMsg(msg, d.ok ? 'ok' : 'error', d.msg || (d.ok ? 'Backup saved.' : 'Failed.'));
+    } catch(e) {
+      showMsg(msg, 'error', 'Network error.');
+    }
+  }
+
+  async function clearCredentials() {
+    if (!confirm('Remove all saved Wi-Fi credentials from the device?')) return;
+    try {
+      const r = await fetch('/api/wifi/credentials', { method: 'DELETE' });
+      const d = await r.json();
+      alert(d.ok ? 'Credentials cleared. The device will start in AP-only mode on next boot.' : (d.msg || 'Failed.'));
+      if (d.ok) loadStatus();
+    } catch(e) {
+      alert('Network error.');
+    }
+  }
+
+  function togglePassVis(inputId, btnId) {
+    const inp = document.getElementById(inputId);
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  }
+
+  function showMsg(el, type, text) {
+    el.style.display = 'block';
+    el.style.color = type === 'ok' ? 'var(--on-2)' : type === 'error' ? 'var(--off)' : 'var(--text-2)';
+    el.textContent = text;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Init
+  loadStatus();
+  setInterval(loadStatus, 15000);
+</script>
+</body>
+</html>

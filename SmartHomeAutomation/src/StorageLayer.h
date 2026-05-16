@@ -78,6 +78,20 @@ void setLogsEnabled(bool enabled);
   bool readCloudQueueHead(String *lineOut) const;
   void dropCloudQueueHead();
   // CLOUD SYNC END
+  // WIFI RUNTIME START
+  // Load all Wi-Fi runtime credentials from NVS into the provided references.
+  bool loadWifiCredentials(String &primarySsid, String &primaryPass,
+                           String &backupSsid, String &backupPass,
+                           bool &alwaysConnect);
+  // Persist the primary SSID + password and the alwaysConnect toggle.
+  bool saveWifiPrimary(const String &ssid, const String &pass, bool alwaysConnect);
+  // Persist only the backup SSID + password (alwaysConnect is unchanged).
+  bool saveWifiBackup(const String &ssid, const String &pass);
+  // Erase all Wi-Fi runtime credentials and the cloud-registered flag from NVS.
+  bool clearWifiCredentials();
+  // Returns true if a non-empty primary SSID has been saved to NVS.
+  bool hasRuntimeWifiCredentials();
+  // WIFI RUNTIME END
   String readRecentLogsJson(uint16_t limit) const;
   void flushPending(const std::function<void(const String &line)> &sender);
   void cleanupDaily(uint64_t nowEpoch);
