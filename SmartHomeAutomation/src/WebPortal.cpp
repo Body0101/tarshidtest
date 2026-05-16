@@ -1116,6 +1116,140 @@ Serial.printf("[AddUser] Requester OK: %s\n", requester->macAddress);
   }
   server_.streamFile(file, "text/html");
   file.close(); });
+
+  // WIFI PROVISION START — routes that serve and back the Wi-Fi setup page.
+
+  // Serve the shared stylesheet extracted from index.html.
+  server_.on("/styles.css", HTTP_GET, [this]()
+             {
+    File file = LittleFS.open("/styles.css", FILE_READ);
+    if (!file) { server_.send(404, "text/plain", "styles.css missing"); return; }
+    server_.sendHeader("Cache-Control", "max-age=3600");
+    server_.streamFile(file, "text/css");
+    file.close(); });
+
+  // Serve the Wi-Fi setup page.
+  server_.on("/wifi.html", HTTP_GET, [this]()
+             {
+    File file = LittleFS.open("/wifi.html", FILE_READ);
+    if (!file) { server_.send(404, "text/plain", "wifi.html missing"); return; }
+    server_.streamFile(file, "text/html");
+    file.close(); });
+
+  // GET /api/wifi/status — current Wi-Fi connection info + saved credentials.
+  server_.on("/api/wifi/status", HTTP_GET, [this]()
+             {
+    JsonDocument doc;
+    const bool connected = WiFi.status() == WL_CONNECTED;
+    doc["connected"] = connected;
+    doc["ssid"]      = connected ? WiFi.SSID() : "";
+    doc["ip"]        = connected ? WiFi.localIP().toString() : "";
+    doc["rssi"]      = connected ? (int)WiFi.RSSI() : 0;
+    // Read persisted credentials directly so this endpoint needs no main.cpp coupling.
+    bool alwaysConnect = false;
+    String primarySsid, primaryPass, backupSsid, backupPass;
+    if (storage_) {
+      storage_->loadWifiCredentials(primarySsid, primaryPass, backupSsid, backupPass, alwaysConnect);
+    }
+    doc["alwaysConnect"] = alwaysConnect;
+    doc["savedSsid"]    = primarySsid;
+    doc["backupSsid"]   = backupSsid;
+    doc["hasBackup"]    = !backupSsid.isEmpty();
+    String payload;
+    serializeJson(doc, payload);
+    server_.send(200, "application/json", payload); });
+
+  // POST /api/wifi/scan — scan for nearby access points and return results.
+  server_.on("/api/wifi/scan", HTTP_POST, [this]()
+             {
+    const int n = WiFi.scanNetworks(false, false);
+    JsonDocument doc;
+    JsonArray networks = doc["networks"].to<JsonArray>();
+    for (int i = 0; i < n && i < 20; ++i) {
+      JsonObject net = networks.add<JsonObject>();
+      net["ssid"] = WiFi.SSID(i);
+      net["rssi"] = WiFi.RSSI(i);
+      net["open"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+    }
+    WiFi.scanDelete();
+    String payload;
+    serializeJson(doc, payload);
+    server_.send(200, "application/json", payload); });
+
+  // POST /api/wifi/connect — set primary credentials and trigger connection.
+  // Body: {"ssid":"...", "pass":"...", "save":true, "alwaysConnect":false}
+  server_.on("/api/wifi/connect", HTTP_POST, [this]()
+             {
+    const String body = server_.arg("plain");
+    if (body.isEmpty() || body.length() > MAX_HTTP_BODY_BYTES || containsBlockedInputTokens(body)) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid body.\"}");
+      return;
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, body) ||
+        !hasOnlyAllowedKeys(doc, {"ssid", "pass", "save", "alwaysConnect"})) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid JSON.\"}");
+      return;
+    }
+    const String ssid = doc["ssid"] | "";
+    const String pass = doc["pass"] | "";
+    if (ssid.isEmpty() || ssid.length() > WIFI_SSID_MAX) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"SSID missing or too long.\"}");
+      return;
+    }
+    if (pass.length() > WIFI_PASS_MAX) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"Password too long.\"}");
+      return;
+    }
+    // Queue the provision request for networkTask to process.
+    wifiProvision_.pending      = true;
+    wifiProvision_.isBackup     = false;
+    wifiProvision_.save         = doc["save"] | true;
+    wifiProvision_.alwaysConnect = doc["alwaysConnect"] | false;
+    ssid.toCharArray(wifiProvision_.ssid, sizeof(wifiProvision_.ssid));
+    pass.toCharArray(wifiProvision_.pass, sizeof(wifiProvision_.pass));
+    server_.send(200, "application/json",
+                 "{\"ok\":true,\"msg\":\"Connection request queued. Connecting now…\"}"); });
+
+  // POST /api/wifi/backup — save a backup network (no immediate connect).
+  // Body: {"ssid":"...", "pass":"..."}
+  server_.on("/api/wifi/backup", HTTP_POST, [this]()
+             {
+    const String body = server_.arg("plain");
+    if (body.isEmpty() || body.length() > MAX_HTTP_BODY_BYTES || containsBlockedInputTokens(body)) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid body.\"}");
+      return;
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, body) || !hasOnlyAllowedKeys(doc, {"ssid", "pass"})) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"Invalid JSON.\"}");
+      return;
+    }
+    const String ssid = doc["ssid"] | "";
+    const String pass = doc["pass"] | "";
+    if (ssid.isEmpty() || ssid.length() > WIFI_SSID_MAX) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"SSID missing or too long.\"}");
+      return;
+    }
+    if (pass.length() > WIFI_PASS_MAX) {
+      server_.send(400, "application/json", "{\"ok\":false,\"msg\":\"Password too long.\"}");
+      return;
+    }
+    wifiProvision_.pending  = true;
+    wifiProvision_.isBackup = true;
+    ssid.toCharArray(wifiProvision_.ssid, sizeof(wifiProvision_.ssid));
+    pass.toCharArray(wifiProvision_.pass, sizeof(wifiProvision_.pass));
+    server_.send(200, "application/json", "{\"ok\":true,\"msg\":\"Backup network saved.\"}"); });
+
+  // DELETE /api/wifi/credentials — erase all saved Wi-Fi credentials from NVS.
+  server_.on("/api/wifi/credentials", HTTP_DELETE, [this]()
+             {
+    if (storage_) storage_->clearWifiCredentials();
+    server_.send(200, "application/json",
+                 "{\"ok\":true,\"msg\":\"Wi-Fi credentials cleared.\"}"); });
+
+  // WIFI PROVISION END
+
   server_.onNotFound([this]()
                      {
     // ACCESS CONTROL - Check authorization before serving any route

@@ -616,3 +616,41 @@ void CloudSyncService::pollRemoteCommands() {
     }
   }
 }
+
+// WIFI RUNTIME START
+
+bool CloudSyncService::registerDevice() {
+  if (!configured_ || !networkReady()) {
+    return false;
+  }
+
+  // Build the RPC body for device_self_register(p_device_id, p_token, p_name)
+  String body;
+  body.reserve(200);
+  body += "{\"p_device_id\":";
+  body += jsonString(deviceId());
+  body += ",\"p_token\":";
+  body += jsonString(CLOUD_COMMAND_TOKEN);
+  body += ",\"p_name\":\"ESP32 Smart Home\"}";
+
+  int code = 0;
+  String response;
+  const bool ok = httpRequest("POST", "rpc/device_self_register", body, &code, &response);
+  Serial.printf("[Cloud] registerDevice: HTTP %d  %s\n", code, ok ? "OK" : "FAILED");
+  if (!ok) {
+    Serial.printf("[Cloud] registerDevice response: %s\n", response.c_str());
+  }
+  return ok;
+}
+
+bool CloudSyncService::syncConfigToCloud() {
+  if (!configured_ || !networkReady()) {
+    return false;
+  }
+  // Mark the full state as dirty so the next syncStateSnapshot() push includes
+  // the relay names and timer configuration that live in the engine snapshot.
+  stateDirty_ = true;
+  return syncStateSnapshot();
+}
+
+// WIFI RUNTIME END

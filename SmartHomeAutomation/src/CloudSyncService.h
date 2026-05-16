@@ -16,6 +16,14 @@ class CloudSyncService {
   bool enqueueLocalEvent(const String &eventJson);
   void requestStateSync();
   bool isConfigured() const;
+  // WIFI RUNTIME START
+  // Register (or re-register) this device in Supabase via device_self_register RPC.
+  // Safe to call multiple times; the RPC is an upsert.
+  bool registerDevice();
+  // Push the current relay names and timer configuration to Supabase as part of
+  // the device state snapshot.  Called once after first successful registration.
+  bool syncConfigToCloud();
+  // WIFI RUNTIME END
 
  private:
   struct QueuedCloudEvent {

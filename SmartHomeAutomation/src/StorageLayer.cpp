@@ -1389,3 +1389,56 @@ uint8_t StorageLayer::removeInactiveUsers(uint64_t nowEpoch,
 
 // STORAGE MANAGEMENT END
 // ACCESS CONTROL END
+
+// WIFI RUNTIME START
+
+bool StorageLayer::loadWifiCredentials(String &primarySsid, String &primaryPass,
+                                       String &backupSsid, String &backupPass,
+                                       bool &alwaysConnect) {
+  if (!lock()) return false;
+  primarySsid   = preferences_.getString(WIFI_NVS_SSID,     "");
+  primaryPass   = preferences_.getString(WIFI_NVS_PASS,     "");
+  backupSsid    = preferences_.getString(WIFI_NVS_BAK_SSID, "");
+  backupPass    = preferences_.getString(WIFI_NVS_BAK_PASS, "");
+  alwaysConnect = preferences_.getBool(WIFI_NVS_ALWAYS,     false);
+  unlock();
+  return true;
+}
+
+bool StorageLayer::saveWifiPrimary(const String &ssid, const String &pass, bool alwaysConnect) {
+  if (!lock()) return false;
+  preferences_.putString(WIFI_NVS_SSID,  ssid.substring(0, WIFI_SSID_MAX));
+  preferences_.putString(WIFI_NVS_PASS,  pass.substring(0, WIFI_PASS_MAX));
+  preferences_.putBool(WIFI_NVS_ALWAYS,  alwaysConnect);
+  unlock();
+  return true;
+}
+
+bool StorageLayer::saveWifiBackup(const String &ssid, const String &pass) {
+  if (!lock()) return false;
+  preferences_.putString(WIFI_NVS_BAK_SSID, ssid.substring(0, WIFI_SSID_MAX));
+  preferences_.putString(WIFI_NVS_BAK_PASS, pass.substring(0, WIFI_PASS_MAX));
+  unlock();
+  return true;
+}
+
+bool StorageLayer::clearWifiCredentials() {
+  if (!lock()) return false;
+  preferences_.remove(WIFI_NVS_SSID);
+  preferences_.remove(WIFI_NVS_PASS);
+  preferences_.remove(WIFI_NVS_BAK_SSID);
+  preferences_.remove(WIFI_NVS_BAK_PASS);
+  preferences_.remove(WIFI_NVS_ALWAYS);
+  preferences_.remove(WIFI_NVS_REGISTERED);
+  unlock();
+  return true;
+}
+
+bool StorageLayer::hasRuntimeWifiCredentials() {
+  if (!lock()) return false;
+  const bool has = preferences_.getString(WIFI_NVS_SSID, "").length() > 0;
+  unlock();
+  return has;
+}
+
+// WIFI RUNTIME END

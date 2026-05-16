@@ -12,6 +12,20 @@
 #include "StorageLayer.h"
 #include "TimeKeeper.h"
 
+// WIFI PROVISION START
+// Describes a Wi-Fi connection request submitted through the setup page.
+// The AP serves /wifi.html; the user fills credentials and hits Connect.
+// The request is stored here and consumed by networkTask in main.cpp.
+struct WiFiProvisionRequest {
+  bool pending      = false;
+  bool isBackup     = false;  // true → save as backup network only
+  bool save         = false;  // persist credentials to NVS
+  bool alwaysConnect = false; // persist alwaysConnect toggle
+  char ssid[33]     = {};
+  char pass[65]     = {};
+};
+// WIFI PROVISION END
+
 class WebPortal
 {
 public:
@@ -23,6 +37,17 @@ public:
 
   bool enqueueEvent(const String &eventJson, bool bufferIfOffline);
   uint16_t connectedClientCount() const;
+
+  // WIFI PROVISION START
+  // Returns true if a provisioning request is waiting to be processed.
+  bool hasProvisionRequest() const { return wifiProvision_.pending; }
+  // Atomically returns the pending request and clears the pending flag.
+  WiFiProvisionRequest getAndClearProvisionRequest() {
+    WiFiProvisionRequest r = wifiProvision_;
+    wifiProvision_.pending = false;
+    return r;
+  }
+  // WIFI PROVISION END
 
 private:
   struct QueuedEvent
@@ -128,4 +153,7 @@ private:
   TaskHandle_t commandContextTask_ = nullptr;
   String commandContextMac_ = "SYSTEM";
   uint32_t commandContextExpiryMs_ = 0;
+  // WIFI PROVISION START
+  WiFiProvisionRequest wifiProvision_{};
+  // WIFI PROVISION END
 };

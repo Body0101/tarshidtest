@@ -652,3 +652,61 @@ begin
     alter publication supabase_realtime add table public.smart_home_remote_commands;
   end if;
 end $$;
+
+-- DEVICE SELF-REGISTER START
+-- Allows the ESP32 to register itself in Supabase using only its device_id
+-- and command_token (no admin session required). The RPC is callable by the
+-- anon role so it works immediately after internet is confirmed at boot.
+-- Subsequent calls are safe no-ops (upsert).
+create or replace function public.device_self_register(
+  p_device_id text,
+  p_token     text,
+  p_name      text default 'ESP32 Smart Home'
+)
+returns json
+language plpgsql
+security definer
+set search_path = public, smart_home_private, pg_temp
+as $$
+declare
+  v_token_hash text;
+begin
+  if p_device_id is null or length(trim(p_device_id)) < 3 or length(p_device_id) > 64
+     or p_device_id !~ '^[A-Za-z0-9_.:-]+$' then
+    raise exception 'invalid device_id' using errcode = '22023';
+  end if;
+  if p_token is null or length(p_token) < 8 then
+    raise exception 'invalid token (must be >= 8 chars)' using errcode = '22023';
+  end if;
+
+  v_token_hash := encode(
+    digest(convert_to(p_token, 'UTF8'), 'sha256'),
+    'hex'
+  );
+
+  insert into public.smart_home_devices (id, name, command_token_hash, active)
+  values (
+    p_device_id,
+    coalesce(nullif(trim(p_name), ''), 'ESP32 Smart Home'),
+    v_token_hash,
+    true
+  )
+  on conflict (id) do update
+    set command_token_hash = excluded.command_token_hash,
+        name               = coalesce(nullif(trim(excluded.name), ''),
+                                      smart_home_devices.name),
+        active             = true,
+        updated_at         = now();
+
+  -- Ensure a device_states row exists so state syncs never fail on FK absence.
+  insert into public.smart_home_device_states (device_id, state)
+  values (p_device_id, '{}'::jsonb)
+  on conflict (device_id) do nothing;
+
+  return json_build_object('ok', true, 'device_id', p_device_id);
+end;
+$$;
+
+revoke all on function public.device_self_register(text, text, text) from public;
+grant execute on function public.device_self_register(text, text, text) to anon;
+-- DEVICE SELF-REGISTER END

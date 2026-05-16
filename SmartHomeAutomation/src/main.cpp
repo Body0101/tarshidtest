@@ -73,8 +73,35 @@ uint32_t gLastInternetProbeMs = 0;
 uint8_t gConsecutiveWiFiHealthFailures = 0;
 uint8_t gConsecutiveInternetFailures = 0;
 
+// WIFI RUNTIME START
+// Credentials loaded from NVS at boot. Override compile-time STA_SSID/STA_PASSWORD.
+String gRuntimePrimarySSID;
+String gRuntimePrimaryPass;
+String gRuntimeBackupSSID;
+String gRuntimeBackupPass;
+bool gAlwaysConnect       = false; // persist+auto-connect on every boot
+bool gUsingBackupNetwork  = false; // true while the backup SSID is active
+bool gDeviceRegistered    = false; // true once registerDevice() succeeded
+// WIFI RUNTIME END
+
 bool hasStaCredentials() {
-  return strlen(STA_SSID) > 0;
+  return !gRuntimePrimarySSID.isEmpty() || strlen(STA_SSID) > 0;
+}
+
+bool hasBackupNetwork() {
+  return !gRuntimeBackupSSID.isEmpty();
+}
+
+// The SSID/pass the STA should connect to right now (primary unless we fell
+// back to the backup because the primary lost internet).
+String activeStaSsid() {
+  if (gUsingBackupNetwork && !gRuntimeBackupSSID.isEmpty()) return gRuntimeBackupSSID;
+  return gRuntimePrimarySSID.isEmpty() ? String(STA_SSID) : gRuntimePrimarySSID;
+}
+
+String activeStaPass() {
+  if (gUsingBackupNetwork && !gRuntimeBackupSSID.isEmpty()) return gRuntimeBackupPass;
+  return gRuntimePrimarySSID.isEmpty() ? String(STA_PASSWORD) : gRuntimePrimaryPass;
 }
 
 bool onlineModeAvailable() {
@@ -215,24 +242,39 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 }
 
 void setupWiFi() {
+  // Load runtime credentials from NVS first — they override compile-time build vars.
+  gStorage.loadWifiCredentials(gRuntimePrimarySSID, gRuntimePrimaryPass,
+                               gRuntimeBackupSSID, gRuntimeBackupPass,
+                               gAlwaysConnect);
+  if (!gRuntimePrimarySSID.isEmpty()) {
+    Serial.printf("[WiFi] Runtime credentials loaded — primary: \"%s\", alwaysConnect: %s\n",
+                  gRuntimePrimarySSID.c_str(), gAlwaysConnect ? "YES" : "NO");
+  }
+  if (!gRuntimeBackupSSID.isEmpty()) {
+    Serial.printf("[WiFi] Backup network: \"%s\"\n", gRuntimeBackupSSID.c_str());
+  }
+
   WiFi.persistent(false);
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(onWiFiEvent);
-
-  // Erase any previously saved network credentials from the WiFi stack so
-  // connections are driven exclusively by the config-file values in STA_SSID /
-  // STA_PASSWORD (injected at build time via WIFI_STA_SSID / WIFI_STA_PASSWORD).
+  // Erase any credentials the Arduino Wi-Fi stack may have cached.
   WiFi.disconnect(true, true);
   delay(100);
 
-  if (hasStaCredentials()) {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(STA_SSID, STA_PASSWORD);
-    Serial.printf("[WiFi] STA connecting to \"%s\" (credentials from build config)\n", STA_SSID);
+  // DESIGN: always start the AP so the setup page is reachable.
+  // If alwaysConnect is set AND we have credentials, also begin STA in
+  // WIFI_AP_STA mode so the device can reach the internet in the background.
+  // The AP is closed only after internet is confirmed in enterOnlineMode().
+  if (gAlwaysConnect && hasStaCredentials()) {
+    WiFi.mode(WIFI_AP_STA);
+    startSecureSoftAp();
+    WiFi.begin(activeStaSsid().c_str(), activeStaPass().c_str());
+    Serial.printf("[WiFi] AP+STA: connecting to \"%s\"\n", activeStaSsid().c_str());
   } else {
-    WiFi.mode(WIFI_OFF);
-    Serial.println("[WiFi] STA credentials empty; offline AP mode will start.");
+    WiFi.mode(WIFI_AP);
+    startSecureSoftAp();
+    Serial.println("[WiFi] AP-only mode (no alwaysConnect or no credentials).");
   }
 }
 
@@ -284,7 +326,7 @@ void enterOfflineMode() {
     return;
   }
 
-  const bool keepSta = hasStaCredentials();
+  const bool keepSta = hasStaCredentials() && gAlwaysConnect;
   WiFi.mode(keepSta ? WIFI_AP_STA : WIFI_AP);
   WiFi.persistent(false);
   WiFi.setSleep(false);
@@ -299,9 +341,9 @@ void enterOfflineMode() {
   }
   Serial.printf("[Mode]   WiFi mode: %s\n", keepSta ? "WIFI_AP_STA" : "WIFI_AP");
   if (keepSta) {
-    Serial.printf("[Mode]   STA background reconnect to \"%s\" enabled\n", STA_SSID);
+    Serial.printf("[Mode]   STA background reconnect to \"%s\" enabled\n", activeStaSsid().c_str());
     if (WiFi.status() != WL_CONNECTED) {
-      WiFi.begin(STA_SSID, STA_PASSWORD);
+      WiFi.begin(activeStaSsid().c_str(), activeStaPass().c_str());
     }
   }
 
@@ -321,6 +363,7 @@ void enterOnlineMode() {
     return;
   }
 
+  // Close the AP and the offline web portal — we are now fully online.
   gWebPortal.end();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_STA);
@@ -328,13 +371,27 @@ void enterOnlineMode() {
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
   if (WiFi.status() != WL_CONNECTED) {
-    WiFi.begin(STA_SSID, STA_PASSWORD);
+    WiFi.begin(activeStaSsid().c_str(), activeStaPass().c_str());
   }
 
   gNetworkMode = NetworkMode::ONLINE_CLOUD;
   gConsecutiveInternetFailures = 0;
   gCloudSync.requestStateSync();
   gTimeKeeper.trySyncFromNtp(true);
+
+  // WIFI RUNTIME: Register device in Supabase on first successful online connection.
+  if (!gDeviceRegistered) {
+    Serial.println("[Boot] Registering device in Supabase…");
+    if (gCloudSync.registerDevice()) {
+      gDeviceRegistered = true;
+      gStorage.saveBoolSetting(WIFI_NVS_REGISTERED, true);
+      Serial.println("[Boot] Device registered. Syncing config to cloud…");
+      gCloudSync.syncConfigToCloud();
+    } else {
+      Serial.println("[Boot] Device registration failed (will retry on next online transition).");
+    }
+  }
+
   pushSystemEvent("mode.online", "Online cloud mode active.");
 
   Serial.println("[Mode] ONLINE_CLOUD active");
@@ -347,17 +404,27 @@ void enterOnlineMode() {
 
 void maintainNetworkMode() {
   constexpr uint32_t INTERNET_PROBE_INTERVAL_MS = 30000UL;
-  constexpr uint8_t INTERNET_FAILURE_THRESHOLD = 3;
+  constexpr uint8_t  INTERNET_FAILURE_THRESHOLD  = 3;
 
-  if (!onlineModeAvailable()) {
+  // With no credentials and no cloud config there is nothing to do online.
+  // Always ensure the offline AP is running.
+  if (!hasStaCredentials()) {
     enterOfflineMode();
     return;
   }
 
   const uint32_t nowMs = millis();
+
+  // First probe after boot or after a provision request changed credentials.
   if (gNetworkMode == NetworkMode::UNKNOWN) {
-    if (probeInternetAccess()) {
-      enterOnlineMode();
+    if (WiFi.status() == WL_CONNECTED && probeInternetAccess()) {
+      gUsingBackupNetwork = false;
+      if (onlineModeAvailable()) {
+        enterOnlineMode();
+      } else {
+        // STA connected but no cloud config — stay offline AP (user pages).
+        enterOfflineMode();
+      }
     } else {
       enterOfflineMode();
     }
@@ -373,16 +440,37 @@ void maintainNetworkMode() {
   const bool internetOk = probeInternetAccess();
   if (internetOk) {
     gConsecutiveInternetFailures = 0;
-    if (gNetworkMode != NetworkMode::ONLINE_CLOUD) {
+    if (gNetworkMode != NetworkMode::ONLINE_CLOUD && onlineModeAvailable()) {
+      gUsingBackupNetwork = false;
       enterOnlineMode();
     }
     return;
   }
 
+  ++gConsecutiveInternetFailures;
+
+  // Try switching to backup network when the primary keeps failing.
+  if (gConsecutiveInternetFailures == INTERNET_FAILURE_THRESHOLD &&
+      !gUsingBackupNetwork && hasBackupNetwork()) {
+    Serial.printf("[Mode] Primary lost after %u failures — trying backup \"%s\".\n",
+                  gConsecutiveInternetFailures, gRuntimeBackupSSID.c_str());
+    gUsingBackupNetwork = true;
+    gConsecutiveInternetFailures = 0;
+    gNetworkMode = NetworkMode::UNKNOWN; // re-probe on next tick
+    WiFi.disconnect(false, false);
+    WiFi.begin(gRuntimeBackupSSID.c_str(), gRuntimeBackupPass.c_str());
+    if (gNetworkMode == NetworkMode::ONLINE_CLOUD) {
+      // Reopen AP while we try the backup
+      enterOfflineMode();
+    }
+    return;
+  }
+
   if (gNetworkMode == NetworkMode::ONLINE_CLOUD &&
-      ++gConsecutiveInternetFailures >= INTERNET_FAILURE_THRESHOLD) {
+      gConsecutiveInternetFailures >= INTERNET_FAILURE_THRESHOLD) {
     Serial.printf("[Mode] Internet lost (%u consecutive failures); falling back to offline AP.\n",
                   gConsecutiveInternetFailures);
+    gUsingBackupNetwork = false;
     enterOfflineMode();
   }
 }
@@ -403,7 +491,7 @@ void maintainWiFi() {
       WiFi.reconnect();
       if (WiFi.status() != WL_CONNECTED) {
         WiFi.disconnect(false, false);
-        WiFi.begin(STA_SSID, STA_PASSWORD);
+        WiFi.begin(activeStaSsid().c_str(), activeStaPass().c_str());
       }
     }
     return;
@@ -412,9 +500,7 @@ void maintainWiFi() {
   if (nowMs - lastApCheckMs >= 2500UL) {
     lastApCheckMs = nowMs;
     if (WiFi.softAPIP() == IPAddress(0, 0, 0, 0)) {
-      // Re-assert the AP mode before restart so the captive portal and websocket
-      // server stay reachable even after transient Wi-Fi stack faults.
-      WiFi.mode(hasStaCredentials() ? WIFI_AP_STA : WIFI_AP);
+      WiFi.mode(hasStaCredentials() && gAlwaysConnect ? WIFI_AP_STA : WIFI_AP);
       WiFi.setSleep(false);
       if (startSecureSoftAp()) {
         pushSystemEvent("wifi.ap_restarted", "SoftAP restarted automatically after a connection failure.", false, true);
@@ -422,14 +508,13 @@ void maintainWiFi() {
     }
   }
 
-  if (hasStaCredentials() && WiFi.status() != WL_CONNECTED && (nowMs - lastStaReconnectMs) >= 10000UL) {
+  if (hasStaCredentials() && gAlwaysConnect && WiFi.status() != WL_CONNECTED &&
+      (nowMs - lastStaReconnectMs) >= 10000UL) {
     lastStaReconnectMs = nowMs;
-    // Retry STA reconnection without blocking the network task. A soft reconnect
-    // is attempted first, then a full begin() refresh if the station is still down.
     WiFi.reconnect();
     if (WiFi.status() != WL_CONNECTED) {
       WiFi.disconnect(false, false);
-      WiFi.begin(STA_SSID, STA_PASSWORD);
+      WiFi.begin(activeStaSsid().c_str(), activeStaPass().c_str());
     }
   }
 }
@@ -484,13 +569,13 @@ void processWiFiApRecovery() {
       return;
     }
 
-    WiFi.mode(hasStaCredentials() ? WIFI_AP_STA : WIFI_AP);
+    WiFi.mode(hasStaCredentials() && gAlwaysConnect ? WIFI_AP_STA : WIFI_AP);
     WiFi.persistent(false);
     WiFi.setSleep(false);
     WiFi.setAutoReconnect(true);
     startSecureSoftAp();
-    if (hasStaCredentials()) {
-      WiFi.begin(STA_SSID, STA_PASSWORD);
+    if (hasStaCredentials() && gAlwaysConnect) {
+      WiFi.begin(activeStaSsid().c_str(), activeStaPass().c_str());
     }
 
     gWiFiApRecoveryState = WiFiApRecoveryState::WAITING_FOR_AP_READY;
@@ -568,6 +653,49 @@ void initWatchdog() {
   }
 }
 
+// WIFI PROVISION START
+// Called each iteration of networkTask to process any Wi-Fi setup request
+// that the user submitted via /wifi.html.  Runs on the network task so all
+// WiFi.begin() calls are serialised with the rest of the Wi-Fi management.
+void processProvisionRequest() {
+  if (!gWebPortal.hasProvisionRequest()) return;
+  const WiFiProvisionRequest req = gWebPortal.getAndClearProvisionRequest();
+
+  if (req.isBackup) {
+    // Save backup credentials only — no immediate connection attempt.
+    gRuntimeBackupSSID = req.ssid;
+    gRuntimeBackupPass = req.pass;
+    gStorage.saveWifiBackup(gRuntimeBackupSSID, gRuntimeBackupPass);
+    Serial.printf("[Provision] Backup network saved: \"%s\"\n", req.ssid);
+    return;
+  }
+
+  // Primary network request — optionally save, then initiate connection.
+  if (req.save) {
+    gRuntimePrimarySSID = req.ssid;
+    gRuntimePrimaryPass = req.pass;
+    gAlwaysConnect      = req.alwaysConnect;
+    gStorage.saveWifiPrimary(gRuntimePrimarySSID, gRuntimePrimaryPass, gAlwaysConnect);
+    Serial.printf("[Provision] Primary network saved: \"%s\", alwaysConnect=%d\n",
+                  req.ssid, req.alwaysConnect);
+  }
+
+  gUsingBackupNetwork = false;
+  gConsecutiveInternetFailures = 0;
+  // Force a fresh probe on the next maintainNetworkMode() tick.
+  gNetworkMode = NetworkMode::UNKNOWN;
+  gLastInternetProbeMs = 0;
+
+  // Switch to AP+STA so the setup page remains accessible while connecting.
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.disconnect(false, false);
+  const String targetSsid = req.ssid;
+  const String targetPass = req.pass;
+  WiFi.begin(targetSsid.c_str(), targetPass.c_str());
+  Serial.printf("[Provision] Connecting to \"%s\"…\n", req.ssid);
+}
+// WIFI PROVISION END
+
 void controlTask(void *parameter) {
   (void)parameter;
   esp_task_wdt_add(NULL);
@@ -583,6 +711,10 @@ void networkTask(void *parameter) {
   esp_task_wdt_add(NULL);
   uint32_t lastHousekeeping = 0;
   while (true) {
+    // WIFI PROVISION: handle any setup request from /wifi.html BEFORE probing
+    // internet so the new credentials are live when maintainNetworkMode runs.
+    processProvisionRequest();
+
     maintainNetworkMode();
     if (gNetworkMode == NetworkMode::OFFLINE_LOCAL) {
       gWebPortal.loop();
@@ -681,8 +813,13 @@ void setup() {
     }
   });
 
-  if (onlineModeAvailable()) {
-    Serial.printf("[Boot] Waiting for STA connection to \"%s\" ...\n", STA_SSID);
+  // Only block on STA connection at boot if the user chose alwaysConnect and
+  // we have runtime credentials.  On a fresh device (no credentials saved) we
+  // skip the wait entirely and go straight to AP mode so the setup page is
+  // available within seconds of powering on.
+  if (gAlwaysConnect && hasStaCredentials()) {
+    Serial.printf("[Boot] alwaysConnect=true — waiting for STA \"%s\"…\n",
+                  activeStaSsid().c_str());
     const uint32_t staWaitStart = millis();
     while (WiFi.status() != WL_CONNECTED && (millis() - staWaitStart) < 8000UL) {
       delay(100);
@@ -695,12 +832,13 @@ void setup() {
                     millis() - staWaitStart, WiFi.status());
     }
   }
-  if (onlineModeAvailable() && probeInternetAccess()) {
+
+  if (onlineModeAvailable() && WiFi.status() == WL_CONNECTED && probeInternetAccess()) {
     Serial.println("[Boot] Internet verified — entering ONLINE mode");
     enterOnlineMode();
   } else {
-    if (onlineModeAvailable()) {
-      Serial.println("[Boot] Internet probe failed — falling back to OFFLINE mode");
+    if (onlineModeAvailable() && gAlwaysConnect) {
+      Serial.println("[Boot] Internet probe failed — falling back to OFFLINE AP mode");
     }
     enterOfflineMode();
   }

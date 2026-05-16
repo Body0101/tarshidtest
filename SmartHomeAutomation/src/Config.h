@@ -122,3 +122,17 @@ constexpr uint32_t LOG_INACTIVITY_DAYS = 30;
 // NVS key used to persist the activity-log enabled flag across reboots.
 constexpr char LOG_ENABLED_KEY[] = "log_en";
 // STORAGE MANAGEMENT END
+
+// WIFI RUNTIME START
+// NVS keys for user-configurable Wi-Fi credentials (set via AP setup page).
+// These override compile-time STA_SSID/STA_PASSWORD without a reflash.
+constexpr char WIFI_NVS_SSID[]       = "w_ssid";
+constexpr char WIFI_NVS_PASS[]       = "w_pass";
+constexpr char WIFI_NVS_BAK_SSID[]   = "w_bak_ssid";
+constexpr char WIFI_NVS_BAK_PASS[]   = "w_bak_pass";
+constexpr char WIFI_NVS_ALWAYS[]     = "w_always";
+constexpr char WIFI_NVS_REGISTERED[] = "cloud_reg";
+// Maximum SSID and password lengths for runtime storage
+constexpr size_t WIFI_SSID_MAX = 32;
+constexpr size_t WIFI_PASS_MAX = 64;
+// WIFI RUNTIME END
