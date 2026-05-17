@@ -492,6 +492,18 @@ String ControlEngine::buildStateJson() const {
   withLock([&]() {
     JsonDocument doc;
     const uint64_t nowEpoch = nowEpochLocked();
+    // V2: Load friendly names from NVS (set by CloudSyncService.fetchDeviceConfig).
+    // Names are for UI display only — control logic uses hardware channel IDs.
+    String friendlyNamesJson;
+    if (storage_) {
+      storage_->readStringSetting("relay_details", "", &friendlyNamesJson);
+    }
+    JsonDocument friendlyDoc;
+    JsonArrayConst relayDetails;
+    if (!friendlyNamesJson.isEmpty()) {
+      deserializeJson(friendlyDoc, friendlyNamesJson);
+      relayDetails = friendlyDoc.as<JsonArrayConst>();
+    }
     bool anyManual = false;
     bool anyAuto = false;
     bool anyTimer = false;
@@ -527,7 +539,14 @@ String ControlEngine::buildStateJson() const {
       const RelayRuntime &r = runtime_->relays[i];
       const uint64_t onSeconds = effectiveOnSecondsLocked(r, nowEpoch);
       relay["index"] = i;
-      relay["name"] = RELAY_CONFIG[i].name;
+      // V2: Use friendly name from server if available, fall back to compile-time name.
+      // ControlEngine NEVER uses these names for logic — only channel IDs.
+      const char *friendlyName = nullptr;
+      if (!relayDetails.isNull() && i < relayDetails.size()) {
+        friendlyName = relayDetails[i]["friendly_name"] | "";
+      }
+      relay["name"] = (friendlyName && strlen(friendlyName) > 0) ? friendlyName : RELAY_CONFIG[i].name;
+      relay["friendlyName"] = relay["name"];
       relay["state"] = relayStateToText(r.appliedState);
       relay["source"] = sourceToText(r.appliedSource);
       relay["manualMode"] = relayModeToText(r.manualMode);

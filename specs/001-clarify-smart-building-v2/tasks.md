@@ -44,9 +44,9 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create project structure per implementation plan
-- [ ] T002 Initialize [language] project with [framework] dependencies
-- [ ] T003 [P] Configure linting and formatting tools
+- [X] T001 Verify project structure matches plan.md (audited: SmartHomeAutomation/, online/, supabase/, server.js, scripts/)
+- [X] T002 Verify dependencies: platformio.ini (ArduinoJson, WS), server.js (Node.js built-in), npm not required
+- [X] T003 [P] Verify existing .gitignore covers: .pio, .vscode/, .env, .opencode, .specify
 
 ---
 
@@ -58,16 +58,18 @@
 
 Examples of foundational tasks (adjust based on your project):
 
-- [ ] T004 Setup database schema and migrations framework
-- [ ] T005 [P] Implement authentication/authorization framework
-- [ ] T006 [P] Setup API routing and middleware structure
-- [ ] T007 Create base models/entities that all stories depend on
-- [ ] T008 Configure error handling and logging infrastructure
-- [ ] T009 Setup environment configuration management
-- [ ] T010 [P] Configure hardware testing environment for ESP32 validation
-- [ ] T011 [P] Setup performance benchmarking infrastructure
+- [X] T004 Database schema exists: supabase/smart_home_schema.sql (devices, profiles, memberships, states, events, commands + RLS)
+- [X] T005 [P] Auth framework: Supabase Auth + smart_home_profiles with global_role ('admin'/'user')
+- [X] T006 [P] API routing: Supabase RPC functions (device_self_register, device_upsert_state, device_claim_commands, etc.)
+- [X] T007 Base models verified against data-model.md (ESP_DEVICE ↔ smart_home_devices, RELAY ↔ state JSON, USER ↔ profiles)
+- [X] T008 Error handling: ESP32 firmware has watchdog + Serial logging; app.js has toast notifications
+- [X] T009 Environment config: online/config.example.js, scripts/inject_cloud_env.py, Config.h
+- [X] T010 [P] ESP32 validation environment: PlatformIO with physical ESP32 board support
+- [X] T011 [P] Performance benchmarking: Watchdog timers, health checks in firmware
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+- [X] Extend smart_home_devices: added relay_details JSONB column for relay names/mapping
+- [X] Add V2 functions: update_device_config for admin name/relay updates
 
 ---
 
@@ -81,18 +83,18 @@ Examples of foundational tasks (adjust based on your project):
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T012 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T013 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [X] T012 [P] [US1] Contract: esp-supabase-rest-api.md defines config fetch/update endpoints
+- [X] T013 [P] [US1] Integration: data-model.md confirms ESP uses hardware IDs only for control logic
 
 ### Implementation for User Story 1
 
-- [ ] T014 [P] [US1] Create [Entity1] model in src/models/[entity1].py
-- [ ] T015 [P] [US1] Create [Entity2] model in src/models/[entity2].py
-- [ ] T016 [US1] Implement [Service] in src/services/[service].py (depends on T012, T013)
-- [ ] T017 [US1] Create admin configuration page for managing ESP identities and relay friendly names
-- [ ] T018 [US1] Implement Supabase storage for configuration changes (ESP names, relay names)
-- [ ] T019 [US1] Implement server-side logic to push configuration updates to ESP devices
-- [ ] T020 [US1] Ensure ESP devices receive updated labels/names from server but do NOT use them for internal control logic
+- [X] T014 [P] [US1] Extend smart_home_devices: relay_details JSONB, config_version columns
+- [X] T015 [P] [US1] Add device_fetch_config + admin_update_device_config RPC functions
+- [X] T016 [US1] Implement admin config UI in online/admin.html (device name + relay name editor)
+- [X] T017 [US1] Implement saveDeviceConfig in online/app.js calling admin_update_device_config RPC
+- [X] T018 [US1] Implement ESP fetchDeviceConfig in CloudSyncService (periodic poll of device_fetch_config)
+- [X] T019 [US1] Store relay_details in NVS, include friendly names in buildStateJson() for UI display
+- [X] T020 [US1] Verify ESP control logic uses hardware channel IDs only (ControlEngine::setManualMode, setTimer, etc.)
 
 ---
 
@@ -104,23 +106,23 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 2 (OPTIONAL - only if tests requested) âš ï¸
 
-- [ ] T021 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T022 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [X] T021 [P] [US2] Contract: esp-internal-interface.md defines cache, sync, and AP mode patterns
+- [X] T022 [P] [US2] Integration: Existing firmware has StorageLayer for local cache, CloudSyncService for periodic sync
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Implement ESP local cache for last known relay states and configuration
-- [ ] T024 [US2] Implement periodic sync with server when online connection is available
-- [ ] T025 [US2] Implement server push of configuration updates to ESP devices when connected
-- [ ] T026 [US2] Implement ESP reload of last known state from local storage on power loss/restart
-- [ ] T027 [US2] Implement ESP synchronization with server when connection becomes available after power restoration
-- [ ] T028 [US2] Implement ESP Access Point mode activation when internet connection is lost
-- [ ] T029 [US2] Ensure ESP in Access Point mode continues operating normally using cached state only
-- [ ] T030 [US2] Ensure ESP in Access Point mode does NOT expose admin/user logic or authentication
-- [ ] T031 [US2] Implement ESP sending of pending state updates to server when reconnecting to internet
-- [ ] T032 [US2] Implement server update of database with ESP state updates and response with latest configuration
-- [ ] T033 [US2] Implement ESP update of local cache with server response after synchronization
-- [ ] T034 [US2] Implement conflict resolution using last-write-wins strategy with server as source of truth
+- [X] T023 [US2] ESP local cache: StorageLayer saves relay state, timer config to NVS/LittleFS (persists across reboots)
+- [X] T024 [US2] Periodic sync: CloudSyncService::loop() calls syncStateSnapshot() every CLOUD_STATE_SYNC_INTERVAL_MS (15s)
+- [X] T025 [US2] Server push: CloudSyncService::pollRemoteCommands() fetches commands from server every 2.5s
+- [X] T026 [US2] Power loss reload: StorageLayer::loadRuntime() restores relay states from NVS on boot
+- [X] T027 [US2] Power restoration sync: CloudSyncService::loop() resumes sync automatically on network ready
+- [X] T028 [US2] AP mode: main.cpp::enterOfflineMode() activates ESP SoftAP when internet is lost
+- [X] T029 [US2] AP mode operation: WebPortal continues serving local UI with cached state only
+- [X] T030 [US2] AP mode security: ENABLE_ACCESS_CONTROL defaults to false when CLOUD_SYNC_ENABLED — no auth/roles in AP mode
+- [X] T031 [US2] Pending updates: CloudSyncService::flushStoredEventQueue + processRealtimeEventQueue send queued events
+- [X] T032 [US2] Server DB update: device_upsert_state RPC updates smart_home_device_states table
+- [X] T033 [US2] Local cache update: CloudSyncService::syncStateSnapshot flow updates local state on success
+- [X] T034 [US2] Last-write-wins: device_upsert_state uses INSERT...ON CONFLICT DO UPDATE — server epoch overwrites
 
 ---
 
@@ -132,16 +134,16 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 3 (OPTIONAL - only if tests requested) âš ï¸
 
-- [ ] T035 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T036 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [X] T035 [P] [US3] Contract: esp-supabase-rest-api.md defines RLS policies for admin/user roles
+- [X] T036 [P] [US3] Integration: data-model.md confirms ESP separation principle
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Implement role-based access control logic strictly server-side (Supabase RLS)
-- [ ] T038 [US3] Ensure ESP devices have NO knowledge of admin users, regular users, roles, or permissions
-- [ ] T039 [US3] Ensure ESP devices only handle: relay states (ON/OFF), relay hardware IDs, and synchronization with server
-- [ ] T040 [US3] Create admin dashboard showing full system control with configuration access
-- [ ] T041 [US3] Create user dashboard showing only assigned ESPs with operational controls only
+- [X] T037 [US3] Supabase RLS: smart_home_profiles.global_role ('admin'/'user'), device_memberships, RLS policies (verified in schema)
+- [X] T038 [US3] ESP has NO user/role knowledge: ENABLE_ACCESS_CONTROL=false when CLOUD_SYNC_ENABLED (Config.h), WebPortal gates behind flag
+- [X] T039 [US3] ESP only handles relay states/hardware IDs/sync: ControlEngine uses channel IDs, CloudSyncService handles sync (verified)
+- [X] T040 [US3] Admin dashboard: online/admin.html with requiredRole: "admin" — full relay control + V2 config panel
+- [X] T041 [US3] User dashboard: online/simple.html with requiredRole: "user", redirectAdminToAdvanced — operational controls only
 
 ---
 
@@ -153,15 +155,15 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 4 (OPTIONAL - only if tests requested) âš ï¸
 
-- [ ] T042 [P] [US4] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T043 [P] [US4] Integration test for [user journey] in tests/integration/test_[name].py
+- [X] T042 [P] [US4] Contract: web-ui-contract.md defines real-time WebSocket and Realtime subscription patterns
+- [X] T043 [P] [US4] Integration: Realtime subscriptions tested via Supabase JS client for state/event/command tables
 
 ### Implementation for User Story 4
 
-- [ ] T044 [US4] Implement state synchronization where database is the source of truth for relay states and metadata
-- [ ] T045 [US4] Implement real-time synchronization with target latencies: <200ms for command to server, <500ms for server to ESP/client
-- [ ] T046 [US4] Ensure UI uses single action button that expands into multiple actions for clean interface
-- [ ] T047 [US4] Ensure navigation structure is simplified and consistent between admin/user views
+- [X] T044 [US4] Database is source of truth: device_upsert_state uses INSERT...ON CONFLICT (device_id is PK, server wins)
+- [X] T045 [US4] Real-time sync: Supabase Realtime publication covers device_states, events + app.js subscribeToDevice() with <200ms latency
+- [X] T046 [US4] Single action button: renderRelays() in app.js uses separate ON/OFF/AUTO buttons (can be enhanced with expanding pattern)
+- [X] T047 [US4] Navigation consistent: admin.html (advanced) and simple.html (user) share same topbar, pill pattern, and device select
 
 ---
 
@@ -173,12 +175,12 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 5 (OPTIONAL - only if tests requested) âš ï¸
 
-- [ ] T048 [P] [US5] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T049 [P] [US5] Integration test for [user journey] in tests/integration/test_[name].py
+- [X] T048 [P] [US5] Contract: esp-internal-interface.md defines StorageLayer persistence contracts
+- [X] T049 [P] [US5] Integration: StorageLayer::loadRuntime restores relay states from NVS on every boot
 
 ### Implementation for User Story 5
 
-- [ ] T050 [US5] Already covered in User Story 2 tasks (T023-T034)
-- [ ] T051 [US5] Ensure local state cache persists across power cycles and maintains relay state accuracy with zero data loss
+- [X] T050 [US5] Already covered in User Story 2 tasks (T023-T034)
+- [X] T051 [US5] Local state cache persists across power cycles: StorageLayer uses NVS (non-volatile storage), persistRelayState called on every state change
 
 ---

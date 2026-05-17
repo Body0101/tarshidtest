@@ -31,6 +31,21 @@
       </div>
     </section>
 
+    <!-- V2 Admin Config Panel -->
+    <section class="panel" style="margin-top:18px;">
+      <div class="section-head"><div><div class="kicker">Configuration</div><h2>Device &amp; Relay Names</h2><p class="muted">Friendly names are stored in Supabase and pushed to ESP for display only. ESP control logic uses hardware IDs exclusively.</p></div></div>
+      <div id="adminConfigPanel">
+        <div class="form-grid">
+          <label>Device Name<input id="deviceNameInput" type="text" placeholder="Living Room ESP"></label>
+        </div>
+        <div id="relayNameList" class="relay-list" style="margin-top:14px;"></div>
+        <div class="actions" style="margin-top:14px;">
+          <button id="saveDeviceConfigBtn" class="primary">Save Configuration</button>
+          <span id="configSaveMessage" class="muted" style="margin-left:12px;"></span>
+        </div>
+      </div>
+    </section>
+
     <div class="grid two">
       <section class="panel">
         <div class="section-head"><div><div class="kicker">Priority 1</div><h2>Relay Control</h2><p class="muted">Manual ON/OFF and AUTO use the same firmware command contract as offline mode.</p></div></div>

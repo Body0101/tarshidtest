@@ -247,7 +247,7 @@
   function pirs() { return Array.isArray(currentState?.pirs) ? currentState.pirs : []; }
   function relayName(relay, index) { return relay?.name || `Relay ${index + 1}`; }
   function renderAll() {
-    renderRelays(); renderTimerSelect(); renderPower(); renderStats(); renderMapping(); renderSensors(); updateNightLockUi();
+    renderRelays(); renderTimerSelect(); renderPower(); renderStats(); renderMapping(); renderSensors(); updateNightLockUi(); renderAdminConfig();
   }
   function renderRelays() {
     const list = $("relayList");
@@ -344,6 +344,57 @@
     if ($("saveMappingBtn")) $("saveMappingBtn").disabled = locked;
     setPill("syncPill", currentState ? `Night Lock ${locked ? "ON" : "OFF"}` : "Waiting for state", locked ? "warn" : "good");
   }
+
+  // V2 Admin Config Management
+  function renderAdminConfig() {
+    if (!currentState || !currentDeviceId) return;
+    const nameInput = $("deviceNameInput");
+    if (nameInput) {
+      const device = devices.find((d) => d.id === currentDeviceId);
+      nameInput.value = device?.name || currentDeviceId;
+    }
+    const list = $("relayNameList");
+    if (!list) return;
+    const relays = Array.isArray(currentState?.relays) ? currentState.relays : [];
+    list.innerHTML = relays.map((relay, idx) => {
+      const ch = relay.index != null ? relay.index : idx;
+      return `<article class="relay-card"><header><div><h3>Relay ${ch}</h3><small>Hardware channel ${ch}</small></div></header><label>Friendly Name<input class="relay-name-input" data-channel="${ch}" type="text" value="${escapeHtml(relay.friendlyName || relay.name || `Relay ${ch}`)}"></label></article>`;
+    }).join("");
+  }
+  async function saveDeviceConfig() {
+    const nameInput = $("deviceNameInput");
+    const msgEl = $("configSaveMessage");
+    if (!nameInput || !currentDeviceId) { msgEl.textContent = "No device selected."; return; }
+    const name = nameInput.value.trim();
+    const relayInputs = document.querySelectorAll(".relay-name-input");
+    const relayDetails = Array.from(relayInputs).map((input) => ({
+      channel: Number(input.dataset.channel),
+      friendly_name: input.value.trim() || `Relay ${input.dataset.channel}`
+    }));
+    msgEl.textContent = "Saving...";
+    try {
+      const { error } = await configuredClient().rpc("admin_update_device_config", {
+        p_device_id: currentDeviceId,
+        p_name: name || null,
+        p_relay_details: relayDetails
+      });
+      if (error) throw error;
+      msgEl.textContent = "Configuration saved! Pushed to ESP on next sync.";
+      // Update local device name cache
+      const dev = devices.find((d) => d.id === currentDeviceId);
+      if (dev) dev.name = name || dev.name;
+      renderDeviceSelect();
+    } catch (err) {
+      msgEl.textContent = `Error: ${err.message}`;
+    }
+  }
+
+  // Bind admin config events
+  document.addEventListener("DOMContentLoaded", () => {
+    if ($("saveDeviceConfigBtn")) {
+      $("saveDeviceConfigBtn").addEventListener("click", saveDeviceConfig);
+    }
+  });
 
   window.TarshidOnline = { initLoginPage, initDashboard, toggleTheme };
 })();

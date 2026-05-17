@@ -136,6 +136,12 @@ void CloudSyncService::loop() {
     lastCommandPollMs_ = nowMs;
     pollRemoteCommands();
   }
+  // V2: Periodically fetch device config (friendly names) from Supabase.
+  // Config is fetched at a lower frequency than state sync.
+  if (nowMs - lastConfigFetchMs_ >= CLOUD_STATE_SYNC_INTERVAL_MS * 4) {
+    lastConfigFetchMs_ = nowMs;
+    fetchDeviceConfig();
+  }
 }
 
 bool CloudSyncService::networkReady() const {
@@ -651,6 +657,57 @@ bool CloudSyncService::syncConfigToCloud() {
   // the relay names and timer configuration that live in the engine snapshot.
   stateDirty_ = true;
   return syncStateSnapshot();
+}
+
+// V2: Fetch device config (friendly names) from Supabase via device_fetch_config RPC.
+// Stores relay_names map in a local cache so buildStateJson() can emit friendly
+// names for the online dashboard. The ESP control logic NEVER uses these names.
+bool CloudSyncService::fetchDeviceConfig() {
+  if (!configured_ || !networkReady()) {
+    return false;
+  }
+  String body;
+  body.reserve(160);
+  body += "{\"p_device_id\":";
+  body += jsonString(deviceId());
+  body += ",\"p_token\":";
+  body += jsonString(CLOUD_COMMAND_TOKEN);
+  body += "}";
+
+  int code = 0;
+  String response;
+  const bool ok = httpRequest("POST", "rpc/device_fetch_config", body, &code, &response);
+  if (!ok || code != 200 || response.isEmpty()) {
+    return false;
+  }
+
+  JsonDocument doc;
+  if (deserializeJson(doc, response)) {
+    return false;
+  }
+
+  // Extract relay_details array and store friendly names in runtime.
+  // The ControlEngine will include these names in state JSON for the online
+  // dashboard, but the control logic itself uses hardware channel IDs only.
+  JsonArrayConst relayDetails = doc["relay_details"].as<JsonArrayConst>();
+  if (relayDetails.isNull() || relayDetails.size() == 0) {
+    return true;  // No names configured yet — not an error
+  }
+
+  // Store config_version for diagnostic logging
+  const int configVersion = doc["config_version"] | 0;
+  Serial.printf("[V2] Config fetched (version %d, %d relays)\n",
+                configVersion, relayDetails.size());
+
+  // Persist the relay details in NVS so friendly names survive reboots
+  // and are available immediately in offline/AP mode.
+  String jsonPayload;
+  serializeJson(doc["relay_details"], jsonPayload);
+  if (storage_) {
+    storage_->saveStringSetting("relay_details", jsonPayload);
+  }
+
+  return true;
 }
 
 // WIFI RUNTIME END

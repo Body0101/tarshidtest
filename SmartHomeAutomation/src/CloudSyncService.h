@@ -23,6 +23,10 @@ class CloudSyncService {
   // Push the current relay names and timer configuration to Supabase as part of
   // the device state snapshot.  Called once after first successful registration.
   bool syncConfigToCloud();
+  // V2: Fetch friendly names and config from Supabase (device_fetch_config RPC).
+  // Stores relay names in runtime for state JSON display only — NEVER used in
+  // control logic (ControlEngine uses hardware channel IDs exclusively).
+  bool fetchDeviceConfig();
   // WIFI RUNTIME END
 
  private:
@@ -62,6 +66,7 @@ class CloudSyncService {
   uint32_t lastStateSyncMs_ = 0;
   uint32_t lastCommandPollMs_ = 0;
   uint32_t lastQueueFlushMs_ = 0;
+  uint32_t lastConfigFetchMs_ = 0;
   uint32_t lastRelayCommandMs_[RELAY_COUNT] = {};
   volatile bool stateDirty_ = false;
   bool configured_ = false;
