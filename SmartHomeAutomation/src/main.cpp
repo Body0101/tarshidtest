@@ -167,9 +167,12 @@ void pushSystemEvent(const String &eventName, const String &message, bool buffer
   const String eventJson = buildSystemEvent(eventName, message, isError ? "ERROR" : "TIMER");
   if (gNetworkMode == NetworkMode::ONLINE_CLOUD) {
     gCloudSync.enqueueLocalEvent(eventJson);
-    return;
   }
-  gWebPortal.enqueueEvent(eventJson, bufferIfOffline);
+  // AP remains active in both modes — always forward to local portal so
+  // AP-connected clients see real-time state changes even while online.
+  if (gWebPortal.isRunning()) {
+    gWebPortal.enqueueEvent(eventJson, bufferIfOffline);
+  }
 }
 
 void initRuntimeDefaults() {
@@ -348,7 +351,9 @@ void enterOfflineMode() {
   }
 
   gNetworkMode = NetworkMode::OFFLINE_LOCAL;
-  gWebPortal.begin(&gControl, &gStorage, &gTimeKeeper);
+  if (!gWebPortal.isRunning()) {
+    gWebPortal.begin(&gControl, &gStorage, &gTimeKeeper);
+  }
   pushSystemEvent("mode.offline", "Offline local AP mode active.");
 }
 
@@ -358,18 +363,21 @@ void enterOnlineMode() {
     return;
   }
 
-  if (gNetworkMode == NetworkMode::ONLINE_CLOUD && !gWebPortal.isRunning() &&
-      WiFi.getMode() == WIFI_STA) {
+  if (gNetworkMode == NetworkMode::ONLINE_CLOUD) {
     return;
   }
 
-  // Close the AP and the offline web portal — we are now fully online.
-  gWebPortal.end();
-  WiFi.softAPdisconnect(true);
-  WiFi.mode(WIFI_STA);
+  // Keep AP+STA so the setup page and local dashboard remain reachable
+  // even when Supabase is the primary control channel.
+  // The AP is intentionally NOT closed — it serves wifi.html for reconfiguration
+  // and allows local clients to use the dashboard as a fallback.
+  WiFi.mode(WIFI_AP_STA);
   WiFi.persistent(false);
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
+  if (WiFi.softAPIP() == IPAddress(0, 0, 0, 0)) {
+    startSecureSoftAp();
+  }
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.begin(activeStaSsid().c_str(), activeStaPass().c_str());
   }
@@ -378,6 +386,11 @@ void enterOnlineMode() {
   gConsecutiveInternetFailures = 0;
   gCloudSync.requestStateSync();
   gTimeKeeper.trySyncFromNtp(true);
+
+  // Keep local portal running for AP-connected clients (setup page + fallback UI).
+  if (!gWebPortal.isRunning()) {
+    gWebPortal.begin(&gControl, &gStorage, &gTimeKeeper);
+  }
 
   // WIFI RUNTIME: Register device in Supabase on first successful online connection.
   if (!gDeviceRegistered) {
@@ -392,14 +405,11 @@ void enterOnlineMode() {
     }
   }
 
-  pushSystemEvent("mode.online", "Online cloud mode active.");
+  pushSystemEvent("mode.online", "Online cloud mode active. AP remains up for local access.");
 
-  Serial.println("[Mode] ONLINE_CLOUD active");
-  Serial.printf("[Mode]   WiFi mode: WIFI_STA (%s)\n",
-                WiFi.getMode() == WIFI_STA ? "confirmed" : "WARNING: unexpected mode");
+  Serial.println("[Mode] ONLINE_CLOUD active (AP+STA)");
   Serial.printf("[Mode]   STA IP: %s\n", WiFi.localIP().toString().c_str());
-  Serial.printf("[Mode]   AP disabled: %s\n",
-                WiFi.softAPIP() == IPAddress(0, 0, 0, 0) ? "YES" : "NO — AP still visible!");
+  Serial.printf("[Mode]   AP  IP: %s\n", WiFi.softAPIP().toString().c_str());
 }
 
 void maintainNetworkMode() {
@@ -481,9 +491,17 @@ void maintainWiFi() {
   const uint32_t nowMs = millis();
 
   if (gNetworkMode == NetworkMode::ONLINE_CLOUD) {
-    if (WiFi.getMode() != WIFI_STA) {
-      WiFi.softAPdisconnect(true);
-      WiFi.mode(WIFI_STA);
+    // Keep AP+STA — AP serves setup/local UI alongside Supabase cloud control.
+    if (WiFi.getMode() != WIFI_AP_STA) {
+      WiFi.mode(WIFI_AP_STA);
+    }
+    if (nowMs - lastApCheckMs >= 2500UL) {
+      lastApCheckMs = nowMs;
+      if (WiFi.softAPIP() == IPAddress(0, 0, 0, 0)) {
+        if (startSecureSoftAp()) {
+          pushSystemEvent("wifi.ap_restarted", "SoftAP restarted in online mode.", false, true);
+        }
+      }
     }
     if (hasStaCredentials() && WiFi.status() != WL_CONNECTED &&
         (nowMs - lastStaReconnectMs) >= 10000UL) {
@@ -716,13 +734,9 @@ void networkTask(void *parameter) {
     processProvisionRequest();
 
     maintainNetworkMode();
-    if (gNetworkMode == NetworkMode::OFFLINE_LOCAL) {
-      gWebPortal.loop();
-    }
+    gWebPortal.loop(); // AP stays up in both modes — portal always runs
     maintainWiFi();
-    if (gNetworkMode == NetworkMode::OFFLINE_LOCAL) {
-      checkWiFiHealth();
-    }
+    checkWiFiHealth(); // AP watchdog active in both modes
     gTimeKeeper.trySyncFromNtp(gNetworkMode == NetworkMode::ONLINE_CLOUD);
     gTimeKeeper.maybePersistSyncPoint();
 
@@ -808,7 +822,10 @@ void setup() {
   gControl.setEventCallback([](const String &json, bool bufferIfOffline) {
     if (gNetworkMode == NetworkMode::ONLINE_CLOUD) {
       gCloudSync.enqueueLocalEvent(json);
-    } else {
+    }
+    // Always forward to local portal — AP stays up in both modes so
+    // AP-connected clients receive real-time relay/timer state updates.
+    if (gWebPortal.isRunning()) {
       gWebPortal.enqueueEvent(json, bufferIfOffline);
     }
   });
@@ -849,7 +866,7 @@ void setup() {
   xTaskCreatePinnedToCore(controlTask, "control_task", 8192, nullptr, 2, &gControlTaskHandle, 1);
   xTaskCreatePinnedToCore(networkTask, "network_task", 12288, nullptr, 1, &gNetworkTaskHandle, 0);
   if (gCloudSync.isConfigured()) {
-    xTaskCreatePinnedToCore(cloudTask, "cloud_task", 12288, nullptr, 1, &gCloudTaskHandle, 0);
+    xTaskCreatePinnedToCore(cloudTask, "cloud_task", 16384, nullptr, 1, &gCloudTaskHandle, 0);
   }
 }
 

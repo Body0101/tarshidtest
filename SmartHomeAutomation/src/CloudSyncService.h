@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <WebSocketsClient.h>
 #include <initializer_list>
 
 #include "Config.h"
@@ -53,6 +54,25 @@ class CloudSyncService {
   String jsonString(const String &value) const;
   String urlEncode(const String &value) const;
   uint64_t nowEpoch() const;
+
+  // SUPABASE REALTIME START
+  // Persistent WebSocket connection to Supabase Realtime.
+  // Subscribes to INSERT events on device_commands for this device so
+  // new commands are delivered in real-time instead of only on the poll cadence.
+  void beginRealtime();
+  void loopRealtime();
+  void onRealtimeWsEvent(WStype_t type, uint8_t *payload, size_t length);
+  void sendRealtimeMsg(const String &json);
+  void joinRealtimeChannel();
+  String extractRealtimeHost() const;
+  static void onRealtimeWsEventStatic(WStype_t type, uint8_t *payload, size_t length);
+  static CloudSyncService *instance_;
+
+  WebSocketsClient realtimeWs_;
+  bool realtimeSubscribed_ = false;
+  uint32_t lastRealtimeHeartbeatMs_ = 0;
+  uint32_t realtimeMsgRef_ = 0;
+  // SUPABASE REALTIME END
 
   ControlEngine *engine_ = nullptr;
   StorageLayer *storage_ = nullptr;

@@ -10,6 +10,10 @@
 #include "Config.h"
 #include "Utils.h"
 
+// SUPABASE REALTIME START
+CloudSyncService *CloudSyncService::instance_ = nullptr;
+// SUPABASE REALTIME END
+
 namespace {
 constexpr uint32_t RELAY_CLOUD_RATE_LIMIT_MS = 250;
 
@@ -89,6 +93,7 @@ void CloudSyncService::begin(ControlEngine *engine, StorageLayer *storage, TimeK
     return;
   }
   Serial.printf("[Cloud] Enabled for device_id=%s\n", deviceId().c_str());
+  beginRealtime();
 }
 
 bool CloudSyncService::isConfigured() const { return configured_; }
@@ -115,6 +120,7 @@ void CloudSyncService::loop() {
     return;
   }
 
+  loopRealtime(); // drive Supabase Realtime WebSocket
   processRealtimeEventQueue();
 
   if (!networkReady()) {
@@ -616,6 +622,178 @@ void CloudSyncService::pollRemoteCommands() {
     }
   }
 }
+
+// SUPABASE REALTIME START
+
+String CloudSyncService::extractRealtimeHost() const {
+  String host = trimmedSupabaseUrl();
+  if (host.startsWith("https://")) {
+    host = host.substring(8);
+  } else if (host.startsWith("http://")) {
+    host = host.substring(7);
+  }
+  const int slash = host.indexOf('/');
+  if (slash >= 0) {
+    host = host.substring(0, slash);
+  }
+  return host;
+}
+
+void CloudSyncService::beginRealtime() {
+  if (!configured_) return;
+  instance_ = this;
+
+  const String host = extractRealtimeHost();
+  if (host.isEmpty()) {
+    Serial.println("[Realtime] Cannot start: SUPABASE_URL is empty.");
+    return;
+  }
+
+  // Build WebSocket path with API key so the server authenticates the
+  // connection before the Phoenix join message is even sent.
+  String path = "/realtime/v1/websocket?apikey=";
+  path += SUPABASE_PUBLISHABLE_KEY;
+  path += "&vsn=1.0.0";
+
+  // Add anon key as extra HTTP headers required by Supabase's gateway.
+  const String extraHeaders =
+      String("apikey: ") + SUPABASE_PUBLISHABLE_KEY +
+      "\r\nAuthorization: Bearer " + SUPABASE_PUBLISHABLE_KEY;
+  realtimeWs_.setExtraHeaders(extraHeaders.c_str());
+
+  // Use "phoenix" WebSocket sub-protocol as required by Phoenix Framework.
+  realtimeWs_.beginSSL(host.c_str(), 443, path.c_str(), nullptr, "phoenix");
+  realtimeWs_.onEvent(onRealtimeWsEventStatic);
+  realtimeWs_.setReconnectInterval(5000);
+
+  Serial.printf("[Realtime] Connecting to wss://%s%s\n",
+                host.c_str(), path.substring(0, 30).c_str());
+}
+
+void CloudSyncService::loopRealtime() {
+  if (!configured_) return;
+
+  realtimeWs_.loop();
+
+  if (!realtimeSubscribed_) return;
+
+  // Send a Phoenix heartbeat every 25 s to keep the connection alive.
+  // Supabase closes idle WebSocket connections after ~30 s.
+  const uint32_t nowMs = millis();
+  if (nowMs - lastRealtimeHeartbeatMs_ >= 25000UL) {
+    lastRealtimeHeartbeatMs_ = nowMs;
+    realtimeMsgRef_++;
+    String hb = "{\"event\":\"heartbeat\",\"topic\":\"phoenix\",\"payload\":{},"
+                "\"ref\":\"" + String(realtimeMsgRef_) + "\",\"join_ref\":null}";
+    sendRealtimeMsg(hb);
+  }
+}
+
+void CloudSyncService::sendRealtimeMsg(const String &json) {
+  realtimeWs_.sendTXT(json);
+}
+
+void CloudSyncService::joinRealtimeChannel() {
+  realtimeMsgRef_++;
+  const String ref = String(realtimeMsgRef_);
+  const String did = deviceId();
+
+  // Subscribe to INSERT events on device_commands filtered to this device.
+  // The Phoenix join format with postgres_changes config is required by
+  // Supabase Realtime v2 (multiplayer).
+  String msg =
+      "{\"event\":\"phx_join\","
+      "\"topic\":\"realtime:device-" + did + "\","
+      "\"payload\":{"
+        "\"config\":{"
+          "\"broadcast\":{\"ack\":false,\"self\":false},"
+          "\"presence\":{\"key\":\"\"},"
+          "\"postgres_changes\":[{"
+            "\"event\":\"INSERT\","
+            "\"schema\":\"public\","
+            "\"table\":\"device_commands\","
+            "\"filter\":\"device_id=eq." + did + "\""
+          "}]"
+        "},"
+        "\"access_token\":\"" + String(SUPABASE_PUBLISHABLE_KEY) + "\""
+      "},"
+      "\"ref\":\"" + ref + "\","
+      "\"join_ref\":\"" + ref + "\"}";
+
+  sendRealtimeMsg(msg);
+  Serial.println("[Realtime] Sent phx_join for device_commands channel.");
+}
+
+void CloudSyncService::onRealtimeWsEventStatic(WStype_t type,
+                                               uint8_t *payload,
+                                               size_t length) {
+  if (instance_) {
+    instance_->onRealtimeWsEvent(type, payload, length);
+  }
+}
+
+void CloudSyncService::onRealtimeWsEvent(WStype_t type,
+                                         uint8_t *payload,
+                                         size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED:
+      realtimeSubscribed_ = false;
+      Serial.println("[Realtime] Disconnected from Supabase Realtime.");
+      break;
+
+    case WStype_CONNECTED:
+      realtimeSubscribed_ = false;
+      Serial.println("[Realtime] WebSocket connected — joining device channel.");
+      joinRealtimeChannel();
+      lastRealtimeHeartbeatMs_ = millis();
+      break;
+
+    case WStype_TEXT: {
+      if (!payload || length == 0) break;
+
+      // Parse the top-level event/topic fields from the Phoenix frame.
+      // We only need event, topic, and payload.data.type — small parse cost.
+      JsonDocument doc;
+      if (deserializeJson(doc, reinterpret_cast<const char *>(payload), length)) {
+        break;
+      }
+
+      const String event = doc["event"] | "";
+      const String topic = doc["topic"] | "";
+
+      // phx_reply with status "ok" from our join means subscription is live.
+      if (event == "phx_reply") {
+        const String status = doc["payload"]["status"] | "";
+        if (status == "ok" && topic.indexOf("realtime:device-") >= 0) {
+          realtimeSubscribed_ = true;
+          Serial.println("[Realtime] Subscribed to device_commands INSERT events.");
+        } else if (status == "error") {
+          Serial.println("[Realtime] Channel join rejected — check RLS policies and API key.");
+        }
+        break;
+      }
+
+      // postgres_changes notification — a command was inserted for this device.
+      if (event == "postgres_changes") {
+        const String changeType = doc["payload"]["data"]["type"] | "";
+        if (changeType == "INSERT") {
+          Serial.println("[Realtime] New command detected — triggering immediate poll.");
+          // Reset the HTTP poll timer so pollRemoteCommands() fires immediately
+          // on the next loop() iteration rather than waiting for the cadence.
+          lastCommandPollMs_ = 0;
+          stateDirty_ = true;
+        }
+        break;
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+}
+
+// SUPABASE REALTIME END
 
 // WIFI RUNTIME START
 
