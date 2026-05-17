@@ -736,7 +736,7 @@ void networkTask(void *parameter) {
     maintainNetworkMode();
     gWebPortal.loop(); // AP stays up in both modes — portal always runs
     maintainWiFi();
-    checkWiFiHealth(); // AP watchdog active in both modes
+    checkWiFiHealth(); // AP watchdog — runs in OFFLINE_LOCAL mode only
     gTimeKeeper.trySyncFromNtp(gNetworkMode == NetworkMode::ONLINE_CLOUD);
     gTimeKeeper.maybePersistSyncPoint();
 
