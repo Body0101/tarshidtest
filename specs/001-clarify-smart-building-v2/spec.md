@@ -88,6 +88,8 @@ As a user, I want the system to maintain relay state integrity across power cycl
 - How does system handle network partitions where ESP can reach server but server cannot reach ESP (asymmetric connectivity)?
 - What happens when ESP clock drifts significantly affecting timestamp-based conflict resolution?
 - How does system handle ESP devices with duplicate or conflicting IDs?
+- What happens when Supabase (external service) is unavailable for extended periods? → Graceful degradation: ESP keeps local operation, queues state updates, and retries with exponential backoff until service is restored.
+- How does system handle sudden burst of state updates from all 100+ ESPs simultaneously? → Server enforces rate limiting per-device; updates are queued and processed sequentially with priority ordering.
 
 ## Requirements *(mandatory)*
 
@@ -169,3 +171,4 @@ As a user, I want the system to maintain relay state integrity across power cycl
 - Q: How should the system handle and display persistent error states (e.g., failed synchronization, authentication errors) to users in both online and offline modes? → A: Error logs accessible via settings
 - Q: How should the system handle asymmetric network connectivity where ESP can reach server but server cannot initiate communication with ESP? → A: WebSocket persistent connection
 - Q: What are the expected scale limits for the Supabase database in terms of concurrent ESP devices and state update frequency? → A: 100 devices, 1 update/sec/device
+- Q: How should the system behave when Supabase (external service) is unavailable? → A: Graceful degradation: keep local operation, queue updates, retry with backoff
