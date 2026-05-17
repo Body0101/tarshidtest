@@ -2,6 +2,11 @@
 
 Tarshid is an ESP32 smart-home controller with two separate operating modes:
 
+## Constitution & Development Principles
+
+This project follows the Tarshid ESP32 Smart Home Constitution which establishes core principles for code quality, testing standards, user experience consistency, and performance requirements. The constitution is maintained in `.specify/memory/constitution.md` and guides all development decisions.
+
+
 - Offline ESP Local Mode: ESP SoftAP, local pages, local MAC authentication, NVS/LittleFS storage.
 - Online Server Mode: infrastructure WiFi, AP disabled, GitHub Pages dashboard, Supabase Auth/database, NTP time, realtime sync.
 
