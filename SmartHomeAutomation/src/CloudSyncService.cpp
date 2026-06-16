@@ -699,11 +699,14 @@ void CloudSyncService::joinRealtimeChannel() {
   const String did = deviceId();
 
   // Subscribe to INSERT events on device_commands filtered to this device.
-  // The Phoenix join format with postgres_changes config is required by
-  // Supabase Realtime v2 (multiplayer).
+  // Supabase Realtime v2 (multiplayer) requires:
+  //   topic = "realtime:public:<table>"  — the schema:table path
+  //   filter inside payload.config.postgres_changes — for row-level filtering
+  // Using a custom topic like "realtime:device-<id>" causes the server to
+  // reject the join silently; realtimeSubscribed_ would never be set.
   String msg =
       "{\"event\":\"phx_join\","
-      "\"topic\":\"realtime:device-" + did + "\","
+      "\"topic\":\"realtime:public:device_commands\","
       "\"payload\":{"
         "\"config\":{"
           "\"broadcast\":{\"ack\":false,\"self\":false},"
@@ -764,7 +767,7 @@ void CloudSyncService::onRealtimeWsEvent(WStype_t type,
       // phx_reply with status "ok" from our join means subscription is live.
       if (event == "phx_reply") {
         const String status = doc["payload"]["status"] | "";
-        if (status == "ok" && topic.indexOf("realtime:device-") >= 0) {
+        if (status == "ok" && topic == "realtime:public:device_commands") {
           realtimeSubscribed_ = true;
           Serial.println("[Realtime] Subscribed to device_commands INSERT events.");
         } else if (status == "error") {
